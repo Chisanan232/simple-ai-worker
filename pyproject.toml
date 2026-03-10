@@ -26,6 +26,8 @@ classifiers = [
 dependencies = [
     # For AI agent could schedule tasks as positively active
     "apscheduler>=3.11.2",
+    # AI agent framework
+    "crewai>=1.10.1",
 ]
 
 [project.urls]
