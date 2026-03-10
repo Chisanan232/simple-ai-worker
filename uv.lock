@@ -2815,6 +2815,8 @@ source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
     { name = "crewai" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
 ]
 
 [package.dev-dependencies]
@@ -2837,6 +2839,8 @@ pre-commit-ci = [
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.11.2" },
     { name = "crewai", specifier = ">=1.10.1" },
+    { name = "pydantic", specifier = ">=2.11.10" },
+    { name = "pydantic-settings", specifier = ">=2.10.1" },
 ]
 
 [package.metadata.requires-dev]
