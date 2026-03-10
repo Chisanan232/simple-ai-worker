@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12, <4.0"
 resolution-markers = [
     "python_full_version >= '3.14'",
@@ -675,6 +675,22 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d3/38/af70d7ab1ae9d4da450eeec1fa3918940a5fafb9055e934af8d6eb0c2313/et_xmlfile-2.0.0.tar.gz", hash = "sha256:dab3f4764309081ce75662649be815c4c9081e88f0837825f90fd28317d4da54", size = 17234, upload-time = "2024-10-25T17:25:40.039Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c1/8b/5fe2cc11fee489817272089c4203e679c63b570a5aaeb18d852ae3cbba6a/et_xmlfile-2.0.0-py3-none-any.whl", hash = "sha256:7a91720bc756843502c3b7504c77b8fe44217c85c537d85037f0f536151b2caa", size = 18059, upload-time = "2024-10-25T17:25:39.051Z" },
+]
+
+[[package]]
+name = "fastapi"
+version = "0.135.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "annotated-doc" },
+    { name = "pydantic" },
+    { name = "starlette" },
+    { name = "typing-extensions" },
+    { name = "typing-inspection" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e7/7b/f8e0211e9380f7195ba3f3d40c292594fd81ba8ec4629e3854c353aaca45/fastapi-0.135.1.tar.gz", hash = "sha256:d04115b508d936d254cea545b7312ecaa58a7b3a0f84952535b4c9afae7668cd", size = 394962, upload-time = "2026-03-01T18:18:29.369Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e4/72/42e900510195b23a56bde950d26a51f8b723846bfcaa0286e90287f0422b/fastapi-0.135.1-py3-none-any.whl", hash = "sha256:46e2fc5745924b7c840f71ddd277382af29ce1cdb7d5eab5bf697e3fb9999c9e", size = 116999, upload-time = "2026-03-01T18:18:30.831Z" },
 ]
 
 [[package]]
@@ -2815,8 +2831,10 @@ source = { editable = "." }
 dependencies = [
     { name = "apscheduler" },
     { name = "crewai" },
+    { name = "fastapi" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.dev-dependencies]
@@ -2827,7 +2845,6 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pytest-rerunfailures" },
-    { name = "python-dotenv" },
 ]
 pre-commit-ci = [
     { name = "mypy" },
@@ -2839,8 +2856,10 @@ pre-commit-ci = [
 requires-dist = [
     { name = "apscheduler", specifier = ">=3.11.2" },
     { name = "crewai", specifier = ">=1.10.1" },
+    { name = "fastapi", specifier = ">=0.135.1" },
     { name = "pydantic", specifier = ">=2.11.10" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -2851,7 +2870,6 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.23.0,<2" },
     { name = "pytest-cov", specifier = ">=5.0.0,<8" },
     { name = "pytest-rerunfailures", specifier = ">=14.0,<17" },
-    { name = "python-dotenv", specifier = ">=1.0.1,<2" },
 ]
 pre-commit-ci = [
     { name = "mypy", specifier = ">=1.2.0,<2" },

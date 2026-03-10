@@ -31,6 +31,9 @@ dependencies = [
     # Data validation for data models
     "pydantic>=2.11.10",
     "pydantic-settings>=2.10.1",
+    # Web framework for API (Slack events APIs) as a AI chat application
+    "fastapi>=0.135.1",
+    "uvicorn[standard]>=0.41.0",
 ]
 
 [project.urls]
@@ -45,7 +48,6 @@ dev = [
     "pytest-rerunfailures>=14.0,<17",
     "aiohttp>=3.12.13",
     "pytest-asyncio>=0.23.0,<2",
-    "python-dotenv>=1.0.1,<2",
 ]
 pre-commit-ci = [
     "pre-commit>=3.5.0,<5",
