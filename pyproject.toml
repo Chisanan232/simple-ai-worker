@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "test-python-uv-project-template"
+version = "0.0.3"
+description = "🐍 Just a template of Python project be managed by UV."
+authors = [{ name = "Chisanan232", email = "chi10211201@cycu.org.tw" }]
+requires-python = ">=3.12,<4.0"
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Utilities",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Chisanan232/Template-Python-UV-Project"
+Repository = "https://github.com/Chisanan232/Template-Python-UV-Project"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.1.1,<10",
+    "pytest-cov>=5.0.0,<8",
+    "coverage~=7.10",
+    "pytest-rerunfailures>=14.0,<17",
+    "aiohttp>=3.12.13",
+    "pytest-asyncio>=0.23.0,<2",
+    "python-dotenv>=1.0.1,<2",
+]
+pre-commit-ci = [
+    "pre-commit>=3.5.0,<5",
+    "pylint>=3.1.0,<5",
+    "mypy>=1.2.0,<2",
+]
+
+[tool.uv]
+default-groups = [
+    "dev",
+    "pre-commit-ci",
+]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/"]
+packages = ["src"]
+#artifacts = ["slack_mcp/py.typed"]
+
+[tool.hatch.build.targets.wheel]
+include = ["src/"]
+packages = ["src"]
+#artifacts = ["slack_mcp/py.typed"]

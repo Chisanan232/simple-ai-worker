@@ -1,0 +1,29 @@
+python:
+  label: Python
+  permalink: /python
+  description: Python programming and development
+
+uv:
+  label: UV
+  permalink: /uv
+  description: UV package management and tooling
+
+ci-cd:
+  label: CI/CD
+  permalink: /ci-cd
+  description: Continuous Integration and Deployment workflows
+
+template:
+  label: Template
+  permalink: /template
+  description: Project template guidance and best practices
+
+automation:
+  label: Automation
+  permalink: /automation
+  description: Automation strategies for development workflows
+
+developer-experience:
+  label: Developer Experience
+  permalink: /developer-experience
+  description: Enhancements focused on developer productivity and experience

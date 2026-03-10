@@ -1,0 +1,98 @@
+---
+title: Type Checking with MyPy
+description: How the template demonstrates PEP 561 type distribution and static analysis tooling
+---
+
+# Type Checking with MyPy
+
+The Python UV Project Template ships with a minimal `types.py` module and `py.typed` marker to show how to distribute type information (PEP 561) from the start. This page explains how to adapt that example for your project, keep your annotations healthy, and run MyPy with uv.
+
+## PEP Support Out of the Box
+
+The template configuration aligns with common typing standards:
+
+- **[PEP 484](https://peps.python.org/pep-0484/)** – Type hints
+- **[PEP 585](https://peps.python.org/pep-0585/)** – Generic type hints for built-ins
+- **[PEP 561](https://peps.python.org/pep-0561/)** – Distributing type information via `py.typed`
+- **[PEP 695](https://peps.python.org/pep-0695/)** – Modern `type` statement alias syntax (Python ≥3.12)
+
+## Where Types Live
+
+- Default location: `src/<your_package>/types.py`
+- Marker file: `src/<your_package>/py.typed`
+- Public exports: declare symbols in `__all__` so type checkers know what’s available.
+
+```python title="src/your_package/types.py"
+type Percentage = float
+type JSONDict = dict[str, "JSONValue"]
+type JSONValue = str | int | float | bool | None | JSONDict | list["JSONValue"]
+
+__all__ = ["Percentage", "JSONDict", "JSONValue"]
+```
+
+When you rename the package directory, update the paths in `pyproject.toml`, `.github/workflows/type-check.yml`, and any imports to match your chosen package name.
+
+## Running MyPy with uv
+
+The template keeps tooling simple:
+
+```bash
+# Install dependencies declared in pyproject.toml
+uv sync
+
+# Run mypy on the entire package
+uv run mypy src/
+
+# Target a submodule or run strict mode on demand
+uv run mypy src/your_package/types.py
+uv run mypy --strict src/your_package/
+```
+
+`pyproject.toml` contains default MyPy settings — adjust `mypy.ini` or `pyproject.toml` if you prefer a different configuration style.
+
+## Pre-commit Hook Integration
+
+A MyPy hook is already listed in `.pre-commit-config.yaml`. After running `uv sync`, enable the hooks:
+
+```bash
+pre-commit install
+pre-commit run mypy --all-files
+```
+
+This mirrors what happens in CI and prevents untyped or mis-typed code from landing in the main branch.
+
+## Publishing Types (PEP 561)
+
+To ensure consumers receive your type information when installing from PyPI:
+
+1. Keep `py.typed` in the root of your package.
+2. Export symbols through `__all__` in `types.py` (or via your package root `__init__.py`).
+3. If you restructure files, update `.github/workflows/type-check.yml` so the workflow monitors the correct paths.
+4. Uncomment and adjust the `artifacts` entries in `pyproject.toml` (wheel/sdist targets) if you rely on Hatch to copy additional files.
+
+## Customizing the Example
+
+1. **Rename the package** – Replace `your_package` everywhere with your actual package name.
+2. **Expand `types.py`** – Add Protocols, TypedDicts, Literal types, etc., that match your domain.
+3. **Document Types** – Reference your new definitions in docstrings or docs so teammates know they exist.
+4. **Add tests** – Validate runtime helpers (type guards, validator helpers) just like any other logic.
+
+## Type Distribution Workflow
+
+The template includes `.github/workflows/type-check.yml`, which validates that `types.py` and `py.typed` end up inside distribution artifacts. After you rename your package, update the paths in that workflow (e.g., change `src/your_package/types.py`). See the [PEP 561 Type Distribution Workflow](./ci-cd/type-checking-workflow.mdx) for a full walkthrough.
+
+## Troubleshooting Checklist
+
+- **Imports fail in CI** – Ensure the package name in MyPy command matches your src layout (e.g., `uv run mypy src/`).
+- **`py.typed` missing** – Confirm the file exists and, if you changed build tools, that it’s included in wheel/sdist artifacts.
+- **Pre-commit slows down** – Enable MyPy caching by adding `cache_dir` to configuration or leverage `uv run mypy --dirty` locally.
+- **Third-party stubs missing** – Install stub packages via `uv add types-requests` (they’re automatically tracked in `uv.lock`).
+
+## Helpful References
+
+- [MyPy docs](https://mypy.readthedocs.io/)
+- [PEP 561 – Distributing Type Information](https://peps.python.org/pep-0561/)
+- [PEP 695 – Type Parameter Syntax](https://peps.python.org/pep-0695/)
+- [uv documentation](https://docs.astral.sh/uv/)
+
+Keep this file tailored to your real codebase once you flesh out the template. Treat the existing content as scaffolding and expand it as your project grows.

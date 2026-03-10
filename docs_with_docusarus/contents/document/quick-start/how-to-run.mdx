@@ -1,0 +1,291 @@
+---
+id: how-to-run
+title: How to Run
+sidebar_position: 3
+---
+
+```mdx-code-block
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+```
+
+# Customizing Your New Project
+
+This guide explains how to customize and configure your new Python project after creating it from the template.
+
+## Step 1: Update Project Metadata
+
+After creating your project from the template, customize the `pyproject.toml` file with your project details:
+
+```toml title="pyproject.toml"
+[project]
+name = "your-project-name"  # ← Update this
+version = "0.1.0"  # ← Set initial version
+description = "Your project description"  # ← Update this
+authors = [{ name = "Your Name", email = "your.email@example.com" }]  # ← Update this
+requires-python = ">=3.12,<4.0"
+readme = "README.md"
+license = { file = "LICENSE" }
+keywords = ["your", "project", "keywords"]  # ← Add relevant keywords
+```
+
+## Step 2: Set Up Development Environment
+
+### Install Dependencies and Activate Environment
+
+```bash
+# Install all dependencies (including dev tools)
+uv sync
+
+# Activate the virtual environment (optional, uv run handles this automatically)
+source .venv/bin/activate  # macOS/Linux
+# or
+.venv\Scripts\activate     # Windows
+```
+
+### Set Up Pre-commit Hooks
+
+```bash
+# Install pre-commit hooks for code quality
+uv run pre-commit install
+
+# Test pre-commit setup
+uv run pre-commit run --all-files
+```
+
+## Step 3: Customize Project Structure
+
+### Update README.md
+
+Replace the template placeholders in `README.md`:
+
+```markdown title="README.md"
+# Your Project Name
+
+## Overview
+Brief description of what your project does
+
+## Installation
+pip install your-package-name
+# or
+uv add your-package-name
+
+## Quick Start
+```python
+from your_project import main_function
+
+result = main_function()
+print(result)
+```
+
+Replace `<you lib name>` placeholders with your actual project name.
+
+### Add Your Source Code
+
+<Tabs>
+<TabItem value="package" label="Package Structure">
+
+```bash
+# Create your main package
+mkdir src/your_project_name
+touch src/your_project_name/__init__.py
+touch src/your_project_name/main.py
+
+# Example main.py content
+echo 'def hello_world():
+    return "Hello from your project!"
+
+if __name__ == "__main__":
+    print(hello_world())' > src/your_project_name/main.py
+```
+
+</TabItem>
+<TabItem value="module" label="Single Module">
+
+```bash
+# Create a single module
+touch src/your_module.py
+
+# Example module content
+echo 'def main():
+    """Main function of your project."""
+    print("Welcome to your new project!")
+
+if __name__ == "__main__":
+    main()' > src/your_module.py
+```
+
+</TabItem>
+</Tabs>
+
+## Step 4: Development Workflow
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run tests with coverage
+uv run pytest --cov=src --cov-report=html
+
+# Run specific test file
+uv run pytest test/unit_test/test_example.py
+```
+
+### Code Quality Checks
+
+```bash
+# Format code with black
+uv run black src/ test/
+
+# Lint code with pylint
+uv run pylint src/
+
+# Type checking with mypy
+uv run mypy src/
+
+# Run all pre-commit hooks
+uv run pre-commit run --all-files
+```
+
+### Adding Dependencies
+
+<Tabs>
+<TabItem value="production" label="Production Dependencies">
+
+```bash
+# Add production dependencies
+uv add requests pandas numpy
+
+# Add with version constraints
+uv add "fastapi>=0.100.0,<1.0.0"
+```
+
+</TabItem>
+<TabItem value="development" label="Development Dependencies">
+
+```bash
+# Add development dependencies
+uv add --dev black pylint mypy
+
+# Add to specific dependency group
+uv add --group test pytest-mock
+```
+
+</TabItem>
+</Tabs>
+
+## Step 5: Configure CI/CD
+
+The template includes GitHub Actions workflows in `.github/workflows/`:
+
+### Update GitHub Secrets (if needed)
+
+For advanced workflows, you may need to configure repository secrets:
+
+1. Go to your GitHub repository → Settings → Secrets and variables → Actions
+2. Add any required secrets (e.g., PyPI tokens, deployment keys)
+
+### Customize Workflows
+
+Edit `.github/workflows/ci.yaml` to match your project needs:
+
+```yaml title=".github/workflows/ci.yaml"
+name: CI
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12", "3.13"]  # Customize Python versions
+    
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: ./.github/actions/setup-python-uv
+        with:
+          python-version: ${{ matrix.python-version }}
+      
+      # Your custom test steps here
+```
+
+## Step 6: Documentation Setup
+
+### Docusaurus Documentation (Optional)
+
+```bash
+# Navigate to documentation directory
+cd docs_with_docusarus
+
+# Install documentation dependencies
+npm install
+
+# Start development server
+npm start
+
+# Build static documentation
+npm run build
+```
+
+### MkDocs Documentation (Alternative)
+
+```bash
+# Navigate to MkDocs directory
+cd docs_with_mkdocs
+
+# Install MkDocs dependencies
+uv run pip install -r requirements.txt
+
+# Start development server
+uv run mkdocs serve
+
+# Build documentation
+uv run mkdocs build
+```
+
+## Step 7: Final Setup
+
+### Initialize Git Repository
+
+```bash
+# If you used Method 2 (manual setup) from installation
+git add .
+git commit -m "Initial commit from Python UV template"
+
+# Connect to remote repository
+git remote add origin https://github.com/YOUR-USERNAME/YOUR-PROJECT.git
+git push -u origin main
+```
+
+### Clean Up Template References
+
+1. Remove or update template-specific files you don't need
+2. Update documentation to reflect your project
+3. Customize GitHub issue templates in `.github/ISSUE_TEMPLATE/`
+
+## Running Your Project
+
+After customization, test that everything works:
+
+```bash
+# Run your main module
+uv run python -m src.your_project_name
+
+# Or run directly
+uv run python src/your_project_name/main.py
+
+# Install in editable mode for development
+uv sync --dev
+```
+
+🎉 **Congratulations!** Your Python project with uv management is now ready for development!
+
+## Next Steps
+
+- Set up your IDE/editor with Python and uv support
+- Configure additional development tools as needed  
+- Start building your amazing Python project!
+- Consider setting up automated releases using the included GitHub Actions

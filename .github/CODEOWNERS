@@ -1,0 +1,53 @@
+# CODEOWNERS file for the <your project name> project
+# Format: file-pattern @owner
+# Order is important; the last matching pattern takes precedence.
+
+#######################################
+# Repository Default Owner
+#######################################
+*                                     <your GitHub name>
+
+# Software license annotation
+/LICENSE                              <your GitHub name>
+
+#######################################
+# Source Code
+#######################################
+/src/。                               <your GitHub name>
+*.py                                  <your GitHub name>
+
+#######################################
+# Tests
+#######################################
+/test/                                <your GitHub name>
+
+#######################################
+# Documentation
+#######################################
+/docs/                                <your GitHub name>
+*.md                                  <your GitHub name>
+*.mdx                                 <your GitHub name>
+*.ts                                  <your GitHub name>
+
+#######################################
+# CI/CD Configuration
+#######################################
+/.github/                             <your GitHub name>
+/.github/workflows/                   <your GitHub name>
+
+#######################################
+# Build Configuration
+#######################################
+/pyproject.toml                       <your GitHub name>
+/scripts/                             <your GitHub name>
+
+#######################################
+# Code Quality and Testing
+#######################################
+/.pre-commit-config.yaml              <your GitHub name>
+/pytest.ini                           <your GitHub name>
+/.coveragerc                          <your GitHub name>
+/mypy.ini                             <your GitHub name>
+/.pylintrc                            <your GitHub name>
+/sonar-project.properties             <your GitHub name>
+/codecov.yml                          <your GitHub name>

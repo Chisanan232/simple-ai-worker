@@ -1,0 +1,98 @@
+---
+id: project-structure
+title: Project Structure
+sidebar_position: 2
+---
+
+# Project Structure & Organization
+
+This page explains the default layout provided by the Python UV Project Template so you can quickly understand where to place code, configuration, and automation for your own project.
+
+## High-Level Layout
+
+```
+project/
+├── src/                       # Application/library source code
+│   └── your_package/          # Rename this to your real package name
+│       ├── __init__.py
+│       ├── types.py           # Example for PEP 561 type distribution
+│       └── py.typed           # Marker enabling downstream type checking
+├── test/                      # Pytest-based test suites
+│   ├── unit_test/
+│   └── integration_test/
+├── docs_with_docusarus/       # Primary documentation (Docusaurus)
+├── docs_with_mkdocs/          # Optional MkDocs documentation
+├── scripts/                   # Helper scripts used by workflows
+├── .github/workflows/         # GitHub Actions automation
+├── pyproject.toml             # Project + tooling configuration
+└── uv.lock                    # Locked dependency graph managed by uv
+```
+
+> **Tip:** Everything under `src/` is packaged and exported when you publish to PyPI. Everything else supports local development, automation, and documentation.
+
+## Source Code (`src/`)
+
+- Designed for the **src-layout** recommended by modern Python packaging.
+- Ships with a minimal `types.py` + `py.typed` combo showing how to distribute type information.
+- Rename the default package directory to match your project name and add modules as needed.
+- Configure exports via `__init__.py` (or expose a public API) based on your needs.
+
+### Type Distribution Example
+
+The template demonstrates PEP 561 support out of the box:
+
+```python title="src/your_package/types.py"
+type UserId = str
+type Payload = dict[str, str | int | float | bool | None]
+
+__all__ = ["UserId", "Payload"]
+```
+
+Add additional aliases or Protocols here and keep `py.typed` in the same package so type checkers pick them up automatically.
+
+## Testing (`test/`)
+
+- Pytest folders split into `unit_test/` and `integration_test/` for clarity.
+- Extend with more directories (e.g., `contract_test/`, `e2e_test/`) if your project requires broader coverage.
+- Use the provided pytest plugins (coverage, asyncio, reruns) via `pyproject.toml` dependencies.
+- Tests are picked up automatically by `ci.yaml` and `ci_includes_e2e_test.yaml` workflows.
+
+## Automation (`.github/workflows/`)
+
+Key workflows shipped with the template:
+
+- **`ci.yaml`** – Standard matrix CI (Python versions, OS variants, linting, tests).
+- **`ci_includes_e2e_test.yaml`** – Optional CI variant that demonstrates how to add E2E jobs.
+- **`release.yml`** – Intent-driven release process (Python package + Docker + docs).
+- **`release-validate.yml`** / **`release-staging.yml`** – Validation/staging runs before production release.
+- **`documentation.yaml`** – Builds and publishes Docusaurus site.
+- **`type-check.yml`** – PEP 561 type distribution verification using the template’s `src/` package.
+- **Supporting workflows** – Docker CI, docs auto-merge, docs build check, etc.
+
+Use these as blueprints; remove what you do not need or extend them for your environment.
+
+## Documentation (`docs_with_docusarus/` and `docs_with_mkdocs/`)
+
+- Docusaurus site is the primary documentation experience with versioning, search, and blog examples.
+- MkDocs project is included for teams that prefer a Markdown-first experience without React components.
+- Both stacks share the same content philosophy—update whichever matches your needs and disable the other if unnecessary.
+
+## Scripts (`scripts/`)
+
+- Holds helper tooling used by CI (e.g., release utilities, documentation helpers).
+- Keep reusable automation snippets here so they can be invoked locally and by workflows.
+
+## Tooling Configuration
+
+- **`pyproject.toml`** centralizes dependency groups (development, pre-commit) and configures pytest, coverage, pylint, mypy, etc.
+- **`uv.lock`** records exact dependency versions resolved by uv; check it in for reproducible builds.
+- Pre-commit hooks are declared in `.pre-commit-config.yaml` and reference the same virtual environment produced by uv.
+
+## Extending the Template
+
+- **Add packages** – Create new modules under `src/your_package/` and expose them in `__init__.py`.
+- **Add CLI entry points** – Configure `[project.scripts]` or `tool.hatch` sections in `pyproject.toml`.
+- **Add services** – Introduce FastAPI, Click, or other frameworks and wire tests/workflows accordingly.
+- **Add pipelines** – Duplicate existing GitHub workflows or call out to reusable workflows in other repos.
+
+Keeping this structure consistent makes it easier to upgrade the template, onboard contributors, and reuse automation across multiple projects.

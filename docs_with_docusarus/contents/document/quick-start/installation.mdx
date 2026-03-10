@@ -1,0 +1,132 @@
+---
+id: installation
+title: Installation
+sidebar_position: 2
+---
+
+```mdx-code-block
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+```
+
+# Creating a New Project from Template
+
+This guide provides step-by-step instructions for creating a new Python project using this template.
+
+## Method 1: Using GitHub Template (Recommended)
+
+### Step 1: Create Repository from Template
+
+1. Navigate to the [template repository](https://github.com/Chisanan232/Template-Python-UV-Project)
+2. Click the **"Use this template"** button (green button)
+3. Select **"Create a new repository"**
+4. Configure your new repository:
+   - **Repository name**: Enter your project name
+   - **Description**: Brief description of your project
+   - **Visibility**: Choose Public or Private
+   - **Include all branches**: Leave unchecked (recommended)
+
+### Step 2: Clone Your New Repository
+
+```bash
+git clone https://github.com/YOUR-USERNAME/YOUR-PROJECT-NAME.git
+cd YOUR-PROJECT-NAME
+```
+
+## Method 2: Manual Setup
+
+### Step 1: Download or Clone Template
+
+<Tabs>
+<TabItem value="git-clone" label="Git Clone">
+
+```bash
+git clone https://github.com/Chisanan232/Template-Python-UV-Project.git my-new-project
+cd my-new-project
+rm -rf .git  # Remove template's git history
+git init     # Initialize new git repository
+```
+
+</TabItem>
+<TabItem value="download" label="Download ZIP">
+
+1. Go to the [template repository](https://github.com/Chisanan232/Template-Python-UV-Project)
+2. Click **"Code"** → **"Download ZIP"**
+3. Extract the ZIP file to your desired location
+4. Rename the folder to your project name
+
+</TabItem>
+</Tabs>
+
+### Step 2: Install uv Package Manager
+
+<Tabs>
+<TabItem value="macos" label="macOS">
+
+```bash
+# Using Homebrew
+brew install uv
+
+# Or using curl
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+</TabItem>
+<TabItem value="linux" label="Linux">
+
+```bash
+# Using curl
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or using pip
+pip install uv
+```
+
+</TabItem>
+<TabItem value="windows" label="Windows">
+
+```powershell
+# Using PowerShell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Or using pip
+pip install uv
+```
+
+</TabItem>
+</Tabs>
+
+### Step 3: Initialize Project Dependencies
+
+```bash
+# Install all dependencies including dev tools
+uv sync
+
+# Or install only production dependencies
+uv sync --no-dev
+```
+
+## Next Steps
+
+After completing the installation:
+
+1. **Customize the project** - See [How to Run](./how-to-run.mdx) for customization steps
+2. **Update project metadata** - Modify `pyproject.toml` with your project details
+3. **Set up development environment** - Configure pre-commit hooks and IDE settings
+
+## Verification
+
+Verify your installation by running:
+
+```bash
+# Check uv installation
+uv --version
+
+# Check Python environment
+uv run python --version
+
+# Run tests to ensure everything works
+uv run pytest
+```
+
+If all commands execute successfully, your project template is ready for development! 🎉

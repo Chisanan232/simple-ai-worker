@@ -1,0 +1,99 @@
+---
+id: requirements
+title: Requirements
+sidebar_position: 1
+---
+
+# Requirements
+
+Before using this Python project template, ensure your development environment meets the following requirements:
+
+## System Requirements
+
+- **Operating System**: Linux, macOS, or Windows
+- **Memory**: Minimum 512MB RAM (1GB+ recommended for development)
+- **Disk Space**: Minimum 500MB for full template with dependencies
+- **Internet Connection**: Required for downloading dependencies and packages
+
+## Core Prerequisites
+
+### Python Version
+
+- **Python**: Version 3.12 or higher (up to 3.14 supported)
+- **Recommended**: Python 3.13 for optimal compatibility
+
+:::tip Python Installation
+If you don't have Python installed:
+- **macOS**: Use `brew install python` or download from [python.org](https://www.python.org/)
+- **Linux**: Use your package manager (e.g., `apt install python3.13`)
+- **Windows**: Download from [python.org](https://www.python.org/) or use `winget install Python.Python.3.13`
+:::
+
+### Package Manager: uv (Required)
+
+This template is specifically designed for **[uv]** - a fast, modern Python package manager written in Rust.
+
+**Why uv?**
+- ⚡ **10-100x faster** than pip/poetry for dependency resolution
+- 🔒 **Deterministic builds** with lockfile support  
+- 🛠️ **All-in-one tool** for project management, virtual environments, and Python installation
+- 📦 **Drop-in replacement** for pip with better dependency resolution
+
+[uv]: https://docs.astral.sh/uv/
+
+### Version Control
+
+- **Git**: Version 2.20 or higher
+- **GitHub Account**: For template creation and repository management (recommended)
+
+## Development Tools (Included in Template)
+
+These tools are automatically configured when you use this template:
+
+- **Testing**: pytest, pytest-cov, pytest-asyncio, pytest-rerunfailures
+- **Code Quality**: pylint, mypy, black formatting
+- **Pre-commit Hooks**: Automated code quality checks
+- **CI/CD**: GitHub Actions workflows
+
+## Optional Requirements
+
+### For Documentation Development
+
+- **Node.js**: Version 16+ (for Docusaurus documentation)
+- **npm/yarn**: For managing documentation dependencies
+
+### For Containerized Deployment
+
+- **Docker**: Version 20.10.0 or later
+- **Docker Compose**: Version 2.0+ (for multi-service applications)
+
+### For Advanced Development
+
+- **IDE Extensions**: Python, pylint, mypy support (VS Code, PyCharm recommended)
+- **Terminal**: Modern terminal with color support for better uv output
+
+## Compatibility Matrix
+
+| Component | Minimum Version | Recommended | Notes |
+|-----------|----------------|-------------|-------|
+| Python | 3.12 | 3.13 | Template supports 3.12-3.14 |
+| uv | 0.1.0 | Latest | Critical for dependency management |
+| Git | 2.20 | 2.40+ | Required for version control |
+| Docker | 20.10 | Latest | Optional, for containerization |
+
+## Verification Commands
+
+After installing prerequisites, verify your setup:
+
+```bash
+# Check Python version
+python --version
+
+# Check uv installation
+uv --version
+
+# Check Git
+git --version
+```
+
+All commands should return version numbers without errors to proceed with template setup.

@@ -1,0 +1,170 @@
+---
+title: PEP 561 Type Distribution Workflow
+sidebar_position: 7
+---
+
+# PEP 561 Type Distribution Workflow
+
+[![PEP 561 Type Distribution](https://github.com/Chisanan232/Template-Python-UV-Project/actions/workflows/type-check.yml/badge.svg)](https://github.com/Chisanan232/Template-Python-UV-Project/actions/workflows/type-check.yml)
+
+The type-check.yml workflow ensures that the template package distributes its type information according to PEP 561 standards.
+
+**Triggers:**
+- **Push to master**: When type distribution files are modified
+- **Pull requests to master**: For PEP 561 compliance validation before merge
+- **Manual dispatch**: On-demand validation via workflow dispatch
+
+**Purpose**: Validates PEP 561 compliance for type information distribution in Python packages.
+
+:::info MyPy Source Code Checking
+**Note**: MyPy type checking of source code is handled by **pre-commit hooks** (configured in `.pre-commit-config.yaml`). This workflow focuses exclusively on **PEP 561 compliance** - ensuring type information is properly packaged and distributed.
+:::
+
+## Overview
+
+This workflow validates type information distribution:
+
+- **PEP 561 Compliance** - Validates proper type information packaging and distribution
+- **Type Imports** - Ensures type definitions are accessible and functional after installation
+- **Distribution Verification** - Confirms type files are included in built packages
+
+---
+
+## Workflow Jobs
+
+### 1. PEP 561 Compliance Verification (`verify-pep561-compliance`)
+
+Validates that the package correctly implements [PEP 561](https://peps.python.org/pep-0561/) standards for distributing type information with Python packages.
+
+**Purpose**: Ensures type checkers can automatically discover and use the package's type information after installation.
+
+**Validation Process:**
+
+**Step 1: Marker File Validation**
+```bash
+# Verify py.typed marker file exists
+if [ ! -f "src/your_package/py.typed" ]; then
+    echo "Error: py.typed marker file not found!"
+    exit 1
+fi
+py.typed marker file exists
+```
+
+**Step 2: Type Module Validation**
+```bash
+# Verify types.py module and exports
+py.typed marker file exists
+types.py module exists
+types.py has __all__ export
+```
+
+**Step 3: Build Configuration Validation**
+```bash
+# Verify pyproject.toml includes type artifacts
+pyproject.toml includes py.typed in artifacts
+```
+
+**Step 4: Distribution Verification**
+```bash
+# Build package and verify type files in distributions
+uv build --sdist --wheel
+
+# Check source distribution
+py.typed found in source distribution
+types.py found in source distribution
+
+# Check wheel distribution
+py.typed found in wheel distribution
+types.py found in wheel distribution
+```
+
+**PEP Standards Validated:**
+- [PEP 561](https://peps.python.org/pep-0561/) - Distributing and Packaging Type Information
+- [PEP 484](https://peps.python.org/pep-0484/) - Type Hints
+- [PEP 585](https://peps.python.org/pep-0585/) - Type Hinting Generics
+- [PEP 544](https://peps.python.org/pep-0544/) - Protocols (Structural Subtyping)
+- [PEP 695](https://peps.python.org/pep-0695/) - Type Parameter Syntax (Python 3.12+)
+
+### 2. Type Import Testing (`test-type-imports`)
+
+Validates that type definitions are correctly exported and accessible for use in application code.
+
+**Purpose**: Ensures the type system is functional and all type definitions can be imported and used as intended after package installation.
+
+**Test Categories:**
+
+**Module Import Validation**
+```python
+from your_package import types
+Successfully imported types module
+Available types: len(types.__all__)
+```
+
+**Type Accessibility Testing**
+
+The workflow validates that all major type categories are accessible:
+
+```python
+# JSON type definitions
+assert hasattr(types, 'JSONValue')
+assert hasattr(types, 'JSONDict')
+assert hasattr(types, 'JSONList')
+assert hasattr(types, 'JSONPrimitive')
+JSON types accessible
+
+# Protocol definitions (PEP 544)
+assert hasattr(types, 'EventHandlerProtocol')
+assert hasattr(types, 'QueueBackendProtocol')
+Protocol types accessible
+
+# Type guard functions
+assert hasattr(types, 'is_json_value')
+assert hasattr(types, 'is_json_dict')
+assert hasattr(types, 'is_json_list')
+assert hasattr(types, 'is_json_primitive')
+Type guards accessible
+```
+
+**Type Guard Functionality Testing**
+
+Validates runtime type validation functions work correctly:
+
+```python
+# JSON type validation
+assert types.is_json_value('{"key": "value"}') == True
+assert types.is_json_value('{"key": "value"}') == True
+assert types.is_json_value('{"key": "value"}') == True
+JSON type guards work
+
+# Protocol type validation
+assert types.is_event_handler_protocol(lambda x: x) == True
+assert types.is_queue_backend_protocol(lambda x: x) == True
+Protocol type guards work
+```
+
+### 3. PEP 561 Summary (`summary`)
+
+Aggregates results from all validation jobs and provides a comprehensive status report.
+
+**Purpose**: Provides a single source of truth for PEP 561 compliance status.
+
+**Dependencies**: Requires completion of both previous jobs (verify-pep561-compliance, test-type-imports)
+
+**Summary Report Format:**
+```markdown
+## PEP 561 Type Distribution Results
+
+Note: MyPy source code checking is handled by pre-commit hooks
+
+PASSED PEP 561 compliance
+PASSED Type imports
+
+### PEP Standards Verified
+- PEP 561: Distributing and Packaging Type Information
+- PEP 484: Type Hints
+- PEP 585: Type Hinting Generics
+- PEP 544: Protocols (Structural Subtyping)
+- PEP 695: Type Parameter Syntax (Python 3.12+)
+```
+
+**Failure Handling**: The workflow fails if any validation job does not succeed, ensuring type distribution compliance is maintained.

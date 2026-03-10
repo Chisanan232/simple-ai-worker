@@ -1,0 +1,384 @@
+---
+id: continuous-integration  
+title: Continuous Integration
+sidebar_position: 1
+---
+
+```mdx-code-block
+import TOCInline from '@theme/TOCInline';
+```
+
+# Continuous Integration
+
+![Modular CI](https://img.shields.io/badge/CI-Modular%20%26%20Flexible-brightgreen?style=for-the-badge)
+![Multi-Platform](https://img.shields.io/badge/Testing-Multi--Platform%20%26%20Multi--Version-blue?style=for-the-badge)
+![Comprehensive](https://img.shields.io/badge/Coverage-5%20Test%20Types-orange?style=for-the-badge)
+
+The Python UV template features a **comprehensive, modular CI system** that supports flexible testing configurations, multi-platform compatibility, and extensive test coverage reporting. The architecture is designed for scalability and ease of maintenance.
+
+<TOCInline toc={toc} />
+
+## Status Badges
+
+[![CI](https://github.com/Chisanan232/Template-Python-UV-Project/actions/workflows/ci.yaml/badge.svg)](https://github.com/Chisanan232/Template-Python-UV-Project/actions/workflows/ci.yaml)
+[![CI + E2E](https://github.com/Chisanan232/Template-Python-UV-Project/actions/workflows/ci_includes_e2e_test.yaml/badge.svg)](https://github.com/Chisanan232/Template-Python-UV-Project/actions/workflows/ci_includes_e2e_test.yaml)
+
+## CI Workflow Architecture
+
+The new CI system features a **3-tier modular architecture** that provides maximum flexibility and maintainability:
+
+```mermaid
+graph TD
+    A[Main CI Workflows] --> B[ci.yaml - Regular CI]
+    A --> C[ci_includes_e2e_test.yaml - E2E CI]
+    
+    B --> D[rw_run_all_test_and_record.yaml]
+    C --> D
+    
+    D --> E[rw_build_and_test.yaml]
+    D --> F[Coverage Reporting Jobs]
+    
+    E --> G[rw_uv_run_test_with_multi_py_versions.yaml]
+    E --> H[5 Test Types]
+    
+    G --> I[Multi-Platform Matrix]
+    G --> J[Multi-Python Version Matrix]
+    
+    H --> K[Unit Tests]
+    H --> L[Integration Tests] 
+    H --> M[E2E Tests]
+    H --> N[Contract Tests]
+    H --> O[CI Script Tests]
+    
+    F --> P[Codecov Upload]
+    F --> Q[SonarCloud Scan]
+    
+    style A fill:#4CAF50
+    style D fill:#2196F3
+    style E fill:#FF9800
+    style G fill:#9C27B0
+```
+
+### Architecture Benefits
+
+✅ **Modular Design**: Clear separation of concerns across workflow layers  
+✅ **Flexible Configuration**: Configurable Python versions and operating systems  
+✅ **Comprehensive Testing**: 5 different test types with matrix execution  
+✅ **Multi-Platform Support**: Ubuntu (latest, 22.04) and macOS (latest, 14)  
+✅ **Scalable**: Easy to add new test types or platforms  
+✅ **Maintainable**: Single workflow changes affect all consuming workflows
+
+## Workflow Triggers & Configuration
+
+### Main CI Workflow (`ci.yaml`)
+
+**Triggers:**
+- **Push to base branch**: Excluding branches with "e2e" in their name
+- **Pull requests to base branch**: Excluding branches with "e2e" in their name
+- **Path-based filtering**: Only triggers when relevant files change
+
+**Monitored Paths:**
+```yaml
+# GitHub Actions workflows
+- ".github/workflows/ci.yaml"
+- ".github/workflows/rw_build_and_test.yaml"
+- ".github/workflows/rw_run_all_test_and_record.yaml"
+
+# Source code and tests
+- "<your_package_name>/**/*.py"
+- "test/**/*.py"
+
+# Configuration files
+- ".coveragerc", "codecov.yml", "pytest.ini"
+- "sonar-project.properties"
+- "pyproject.toml", "uv.lock"
+```
+
+### E2E CI Workflow (`ci_includes_e2e_test.yaml`)
+
+**Triggers:**
+- **Push to E2E branches**: Branches containing "e2e" in their name
+- **Manual dispatch**: For on-demand E2E testing
+- **Scheduled runs**: Optional cron schedule for regular E2E validation
+
+**Key Features:**
+- Includes all regular CI tests **plus** end-to-end testing
+- Uses Slack bot token for E2E API testing
+- Comprehensive coverage including external service integration
+
+## Detailed Workflow Components
+
+### Tier 1: Main CI Entry Points
+
+#### 1. Regular CI (`ci.yaml`)
+```yaml
+jobs:
+  build-and-test_all:
+    uses: ./.github/workflows/rw_run_all_test_and_record.yaml
+    secrets:
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+      sonar_token: ${{ secrets.SONAR_TOKEN }}
+```
+- **Purpose**: Standard development CI without E2E tests
+- **Optimized**: Faster execution for regular development workflow
+- **Coverage**: Unit, integration, contract, and CI script tests
+
+#### 2. E2E-Enabled CI (`ci_includes_e2e_test.yaml`)
+```yaml
+jobs:
+  build-and-test_all:
+    uses: ./.github/workflows/rw_run_all_test_and_record.yaml
+    with:
+      run_e2e: true
+    secrets:
+      e2e_test_api_token: ${{ secrets.SLACK_BOT_TOKEN }}
+      codecov_token: ${{ secrets.CODECOV_TOKEN }}
+      sonar_token: ${{ secrets.SONAR_TOKEN }}
+```
+- **Purpose**: Comprehensive testing including end-to-end scenarios
+- **Integration**: External API testing with Slack bot integration
+- **Usage**: E2E development branches and validation
+
+### Tier 2: Test Orchestration (`rw_run_all_test_and_record.yaml`)
+
+**Core Functionality:**
+- **Coordinates** all testing phases and coverage reporting
+- **Manages** dependencies between test execution and reporting
+- **Handles** conditional E2E test execution
+- **Integrates** with external coverage and quality tools
+
+**Key Features:**
+```yaml
+inputs:
+  run_e2e:
+    description: "Enable end-to-end testing"
+    type: boolean
+    default: false
+
+secrets:
+  e2e_test_api_token: "Slack bot token for E2E tests"
+  codecov_token: "Codecov API token"
+  sonar_token: "SonarCloud API token"
+```
+
+**Workflow Jobs:**
+1. **`build-and-test`**: Executes all test suites via `rw_build_and_test.yaml`
+2. **Coverage Upload Jobs**: Individual coverage reports for each test type
+3. **`sonarcloud_finish`**: Code quality analysis and reporting
+
+### Tier 3: Core Testing Engine (`rw_build_and_test.yaml`)
+
+**Comprehensive Test Suite Execution:**
+
+#### Test Types Supported
+
+| Test Type | Folder | Description | Parallel Execution |
+|-----------|---------|-------------|-----------------|
+| **Unit Tests** | `./test/unit_test` | Component-level testing | Full matrix |
+| **Integration Tests** | `./test/integration_test` | Multi-component testing | Full matrix |
+| **E2E Tests** | `./test/e2e_test` | End-to-end scenarios | Sequential (`max-parallel: 1`) |
+| **Contract Tests** | `./test/contract_test` | API contract validation | Full matrix |
+| **CI Script Tests** | `./test/ci_script_test` | CI infrastructure testing | Full matrix |
+
+#### Configuration Matrix
+
+**Python Versions (Configurable):**
+```yaml
+python-versions: '["3.13"]'  # Default, easily configurable
+```
+
+**Operating Systems (Multi-Platform):**
+```yaml
+operating-systems: '[
+  "ubuntu-latest", 
+  "ubuntu-22.04", 
+  "macos-latest", 
+  "macos-14"
+]'
+```
+
+### Tier 4: Multi-Platform Test Execution (`rw_uv_run_test_with_multi_py_versions.yaml`)
+
+**Enhanced Features (New):**
+- ✅ **Configurable Python Versions**: JSON array input for flexible Python version testing
+- ✅ **Configurable Operating Systems**: JSON array input for multi-platform support
+- ✅ **Matrix Strategy**: Full combinatorial testing across Python versions and OS platforms
+- ✅ **Dependency Group Support**: UV-based dependency management with group installation
+- ✅ **API Integration Testing**: Slack bot token validation for E2E tests
+
+**Configuration Options:**
+```yaml
+inputs:
+  python-versions:
+    description: "JSON array of Python versions to test against"
+    default: '["3.13"]'
+  operating-systems:
+    description: "JSON array of operating systems to test on"
+    default: '["ubuntu-latest", "ubuntu-22.04", "macos-latest", "macos-14"]'
+  test_type: "Specific test type (unit-test, integration-test, etc.)"
+  test_folder: "Target test folder path"
+  install_dependency_with_group: "UV dependency group for installation"
+  max-parallel: "Maximum parallel jobs (default: 0 = unlimited)"
+```
+
+## Advanced Configuration
+
+### Python Version Flexibility
+
+**Single Version (Fast CI):**
+```yaml
+python-versions: '["3.13"]'
+```
+
+**Multi-Version (Compatibility Testing):**
+```yaml
+python-versions: '["3.11", "3.12", "3.13"]'
+```
+
+### Operating System Flexibility
+
+**Ubuntu Only (Fast CI):**
+```yaml
+operating-systems: '["ubuntu-latest"]'
+```
+
+**Full Cross-Platform:**
+```yaml
+operating-systems: '[
+  "ubuntu-latest", 
+  "ubuntu-22.04", 
+  "macos-latest", 
+  "macos-14",
+  "windows-latest"
+]'
+```
+
+## Coverage Reporting Integration
+
+### Codecov Integration
+
+**Per-Test-Type Coverage:**
+- **Unit Tests**: `codecov_flags: unit-test`
+- **Integration Tests**: `codecov_flags: integration-test`
+- **E2E Tests**: `codecov_flags: e2e-test`
+- **Contract Tests**: `codecov_flags: contract-test`
+- **All Tests Combined**: `codecov_flags: all-test`
+
+### SonarCloud Integration
+
+**Code Quality Metrics:**
+- **Static Analysis**: Code complexity, maintainability
+- **Security**: Vulnerability detection and security hotspots
+- **Reliability**: Bug detection and code smells
+- **Coverage**: Integration with test coverage data
+
+## Best Practices & Usage
+
+### Development Workflow
+
+**Regular Development (Fast CI):**
+1. Create feature branch from base branch
+2. Push commits trigger `ci.yaml` workflow
+3. Fast execution with core test suite (excludes E2E)
+4. Coverage reports uploaded to Codecov
+5. Code quality checked by SonarCloud
+
+**E2E Development:**
+1. Create branch with "e2e" in name (e.g., `feature-e2e`, `e2e-api-testing`)
+2. Push commits trigger `ci_includes_e2e_test.yaml` workflow
+3. Comprehensive testing including external API integration
+4. Full coverage including E2E scenarios
+
+### Configuration for Child Projects
+
+**Step 1: Update Branch Names**
+```yaml
+# In ci.yaml and ci_includes_e2e_test.yaml
+branches:
+  - "main"  # Change from "<your_base_branch>"
+```
+
+**Step 2: Update Package Name**
+```yaml
+# In ci.yaml paths section
+paths:
+  - "your_package/**/*.py"  # Change from "<your_package_name>"
+```
+
+**Step 3: Configure Secrets**
+```yaml
+# Repository secrets needed:
+CODECOV_TOKEN: "Your Codecov token"
+SONAR_TOKEN: "Your SonarCloud token"
+SLACK_BOT_TOKEN: "Your Slack bot token (for E2E tests)"
+```
+
+**Step 4: Customize Test Matrix (Optional)**
+```yaml
+# In rw_build_and_test.yaml, modify for your needs:
+python-versions: '["3.11", "3.12", "3.13"]'  # Add more Python versions
+operating-systems: '["ubuntu-latest", "macos-latest"]'  # Reduce OS matrix if needed
+```
+
+### Performance Optimization
+
+**Fast CI Strategy:**
+- Use single Python version for regular CI
+- Limit OS matrix to essential platforms
+- Run E2E tests only on dedicated branches
+- Use `max-parallel` settings appropriately
+
+**Comprehensive CI Strategy:**
+- Multi-Python version testing for compatibility
+- Full OS matrix for cross-platform validation
+- Include E2E tests in regular workflow
+- Enable scheduled runs for continuous validation
+
+### Troubleshooting
+
+**Common Issues:**
+
+1. **Test Matrix Too Large**
+   - **Symptom**: CI takes too long or hits GitHub Actions limits
+   - **Solution**: Reduce Python versions or OS matrix
+   - **Example**: Use `python-versions: '["3.13"]'` and `operating-systems: '["ubuntu-latest"]'`
+
+2. **E2E Tests Failing**
+   - **Symptom**: E2E workflow fails with authentication errors
+   - **Solution**: Verify `SLACK_BOT_TOKEN` secret is properly configured
+   - **Check**: Ensure bot token has necessary permissions
+
+3. **Coverage Upload Issues**
+   - **Symptom**: Codecov upload fails or shows incomplete coverage
+   - **Solution**: Verify `CODECOV_TOKEN` secret and check coverage file generation
+   - **Debug**: Enable debug logging in coverage upload step
+
+4. **Dependency Installation Failures**
+   - **Symptom**: UV dependency installation fails
+   - **Solution**: Check `pyproject.toml` dependency groups and UV lock file
+   - **Fix**: Ensure dependency group (`dev`) exists and is properly configured
+
+### Migration Guide
+
+**From Legacy CI:**
+1. **Replace** old CI workflows with new modular architecture
+2. **Update** branch and package name references
+3. **Configure** repository secrets for external integrations
+4. **Test** both regular and E2E workflows
+5. **Optimize** matrix configuration for your project needs
+
+**Benefits After Migration:**
+- ✅ **Faster CI**: Separate regular and E2E workflows
+- ✅ **More Flexible**: Configurable Python versions and OS platforms
+- ✅ **Better Organized**: Clear separation of test types
+- ✅ **Comprehensive Coverage**: 5 test types with detailed reporting
+- ✅ **Easier Maintenance**: Modular architecture simplifies updates
+
+---
+
+## Navigation
+
+- **🏠 [CI/CD Overview](./index.mdx)** - Return to main CI/CD hub
+- **🔄 [Release System](./release-system.mdx)** - Learn about releases and deployment
+- **⚙️ [Additional CI Workflows](./additional-ci-workflows.mdx)** - Specialized utility workflows
+- **🛠️ [Developer Guide](./developer-guide.mdx)** - Configuration and troubleshooting
