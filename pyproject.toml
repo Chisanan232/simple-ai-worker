@@ -23,7 +23,10 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
 ]
-dependencies = []
+dependencies = [
+    # For AI agent could schedule tasks as positively active
+    "apscheduler>=3.11.2",
+]
 
 [project.urls]
 Homepage = "https://github.com/Chisanan232/simple-ai-worker"
