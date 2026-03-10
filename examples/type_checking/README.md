@@ -187,8 +187,8 @@ Example 3: Type Guards
 Update these links to point to your project's documentation:
 
 **For Template Repository (`docs_with_docusarus/`):**
-- [Type Checking with MyPy](../../docs_with_docusarus/contents/development/type-checking.mdx)
-- [Type Checking Workflow](../../docs_with_docusarus/contents/development/ci-cd/type-checking-workflow.mdx)
+- [Type Checking with MyPy](../../docs/contents/development/type-checking.mdx)
+- [Type Checking Workflow](../../docs/contents/development/ci-cd/type-checking-workflow.mdx)
 
 **For Child Repositories (typically `docs/`):**
 - Type Checking with MyPy: `../../docs/development/type-checking.md`

@@ -26,7 +26,7 @@
 # CUSTOMIZATION OPTIONS:
 # ----------------------
 # - PACKAGE_NAME: Your package directory name (default: 'src')
-# - DOCS_DIR: Documentation directory name (default: 'docs_with_docusarus')
+# - DOCS_DIR: Documentation directory name (default: 'docs')
 #              Child repos typically use: 'docs'
 # - EXPECTED_TYPES: Array of type definitions to verify in types.py
 #
@@ -45,7 +45,7 @@
 #
 # EXAMPLES:
 # ---------
-# # Use defaults (template repo: src + docs_with_docusarus)
+# # Use defaults (template repo: src + docs)
 # ./scripts/ci/verify_type_checking.sh
 #
 # # Child project with standard structure (package: my_package, docs: docs)
@@ -67,9 +67,9 @@ PACKAGE_NAME="${PACKAGE_NAME:-src}"
 
 # Documentation directory name - override by setting environment variable:
 # DOCS_DIR=docs ./scripts/ci/verify_type_checking.sh
-# Template repo uses: docs_with_docusarus
+# Template repo uses: docs
 # Child repos typically use: docs
-DOCS_DIR="${DOCS_DIR:-docs_with_docusarus}"
+DOCS_DIR="${DOCS_DIR:-docs}"
 
 # Expected type definitions in types.py (customize for your project)
 # Example: EXPECTED_TYPES=("MyEventPayload" "HandlerProtocol" "ConfigDict")
