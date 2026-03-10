@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "test-python-uv-project-template"
-version = "0.0.3"
-description = "🐍 Just a template of Python project be managed by UV."
+name = "simple-ai-worker"
+version = "0.0.0"
+description = "🧑‍💻 Just a POC production"
 authors = [{ name = "Chisanan232", email = "chi10211201@cycu.org.tw" }]
 requires-python = ">=3.12,<4.0"
 readme = "README.md"
@@ -26,8 +26,8 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/Chisanan232/Template-Python-UV-Project"
-Repository = "https://github.com/Chisanan232/Template-Python-UV-Project"
+Homepage = "https://github.com/Chisanan232/simple-ai-worker"
+Repository = "https://github.com/Chisanan232/simple-ai-worker"
 
 [dependency-groups]
 dev = [
@@ -54,9 +54,7 @@ default-groups = [
 [tool.hatch.build.targets.sdist]
 include = ["src/"]
 packages = ["src"]
-#artifacts = ["slack_mcp/py.typed"]
 
 [tool.hatch.build.targets.wheel]
 include = ["src/"]
 packages = ["src"]
-#artifacts = ["slack_mcp/py.typed"]

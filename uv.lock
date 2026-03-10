@@ -646,8 +646,8 @@ wheels = [
 ]
 
 [[package]]
-name = "test-python-uv-project-template"
-version = "0.0.3"
+name = "simple-ai-worker"
+version = "0.0.1"
 source = { editable = "." }
 
 [package.dev-dependencies]
@@ -672,7 +672,7 @@ pre-commit-ci = [
 dev = [
     { name = "aiohttp", specifier = ">=3.12.13" },
     { name = "coverage", specifier = "~=7.10" },
-    { name = "pytest", specifier = ">=8.1.1,<9" },
+    { name = "pytest", specifier = ">=8.1.1,<10" },
     { name = "pytest-asyncio", specifier = ">=0.23.0,<2" },
     { name = "pytest-cov", specifier = ">=5.0.0,<8" },
     { name = "pytest-rerunfailures", specifier = ">=14.0,<17" },
@@ -681,7 +681,7 @@ dev = [
 pre-commit-ci = [
     { name = "mypy", specifier = ">=1.2.0,<2" },
     { name = "pre-commit", specifier = ">=3.5.0,<5" },
-    { name = "pylint", specifier = ">=3.1.0,<4" },
+    { name = "pylint", specifier = ">=3.1.0,<5" },
 ]
 
 [[package]]
