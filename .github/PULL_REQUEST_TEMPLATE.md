@@ -37,19 +37,15 @@
     * [ ] 🍀 Improving something (maybe performance, code quality, security, etc.)
     * [ ] 🚀 Release
 * Scopes:
-    * [ ] ✍️ Command line interface
     * [ ] 💼 Core feature
         * [ ] 🕸️ Web server
-        * [ ] 🤖 MCP server
-        * [ ] 🪡 API client
+        * [ ] 🗓️ Scheduler
+        * [ ] 🤖 AI agent
         * [ ] 🫀 Data model
     * [ ] 🎨 UI/UX (maybe command line interface, etc.)
     * [ ] ⛑️ Error handling
     * [ ] 🧪 Testing
         * [ ] 🧪 Unit testing
-        * [ ] 🧪 Integration testing
-        * [ ] 🧪 End-to-end testing
-        * [ ] 🧪 Contract testing
     * [ ] 📚 Documentation
     * [ ] 🚀 Building
         * [ ] 🤖 CI/CD
