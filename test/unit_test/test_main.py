@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import signal
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import src.main as main_module
 from src.main import _handle_signal
@@ -44,6 +44,19 @@ class TestMain:
         main_module._shutdown_requested = False
         main_module._runner = None
 
+    def _make_fake_settings(
+        self,
+        interval_seconds: int = 60,
+        timezone: str = "UTC",
+        max_concurrent: int = 3,
+    ) -> MagicMock:
+        """Return a mock AppSettings object with sensible defaults."""
+        mock_settings = MagicMock()
+        mock_settings.SCHEDULER_INTERVAL_SECONDS = interval_seconds
+        mock_settings.SCHEDULER_TIMEZONE = timezone
+        mock_settings.MAX_CONCURRENT_DEV_AGENTS = max_concurrent
+        return mock_settings
+
     def test_main_starts_and_stops_scheduler(self) -> None:
         """main() must start a SchedulerRunner and stop it on shutdown."""
         call_count = 0
@@ -55,7 +68,10 @@ class TestMain:
             if call_count >= 1:
                 main_module._shutdown_requested = True
 
+        fake_settings = self._make_fake_settings(interval_seconds=60, timezone="UTC")
+
         with (
+            patch("src.main.get_settings", return_value=fake_settings),
             patch("src.main.SchedulerRunner") as MockRunner,
             patch("src.main.time.sleep", side_effect=fake_sleep),
             patch("src.main.signal.signal"),
@@ -65,9 +81,26 @@ class TestMain:
 
             main_module.main()
 
-            MockRunner.assert_called_once_with(interval_seconds=30, timezone="UTC")
+            MockRunner.assert_called_once_with(interval_seconds=60, timezone="UTC")
             mock_instance.start.assert_called_once()
             mock_instance.stop.assert_called_once_with(wait=True)
+
+    def test_main_uses_settings_interval(self) -> None:
+        """main() must pass SCHEDULER_INTERVAL_SECONDS from settings to SchedulerRunner."""
+        fake_settings = self._make_fake_settings(interval_seconds=120, timezone="Asia/Taipei")
+
+        def fast_exit(seconds: float) -> None:
+            main_module._shutdown_requested = True
+
+        with (
+            patch("src.main.get_settings", return_value=fake_settings),
+            patch("src.main.SchedulerRunner") as MockRunner,
+            patch("src.main.time.sleep", side_effect=fast_exit),
+            patch("src.main.signal.signal"),
+        ):
+            main_module.main()
+
+            MockRunner.assert_called_once_with(interval_seconds=120, timezone="Asia/Taipei")
 
     def test_main_registers_signal_handlers(self) -> None:
         """main() must register handlers for SIGINT and SIGTERM."""
@@ -75,7 +108,10 @@ class TestMain:
         def fast_exit(seconds: float) -> None:
             main_module._shutdown_requested = True
 
+        fake_settings = self._make_fake_settings()
+
         with (
+            patch("src.main.get_settings", return_value=fake_settings),
             patch("src.main.SchedulerRunner"),
             patch("src.main.time.sleep", side_effect=fast_exit),
             patch("src.main.signal.signal") as mock_signal,
