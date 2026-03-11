@@ -1,15 +1,17 @@
 """
 Application entry-point for simple-ai-worker.
 
-Startup sequence (Phase 1):
+Startup sequence (Phase 2):
     1. Configure root logging.
-    2. Instantiate :class:`~src.scheduler.runner.SchedulerRunner`.
+    2. Load :class:`~src.config.settings.AppSettings` from ``.env`` via
+       :func:`~src.config.get_settings`.
     3. Register ``SIGINT`` / ``SIGTERM`` handlers for graceful shutdown.
-    4. Start the scheduler.
-    5. Block the main thread until a signal is received.
+    4. Instantiate :class:`~src.scheduler.runner.SchedulerRunner` using
+       values from :class:`~src.config.settings.AppSettings`.
+    5. Start the scheduler.
+    6. Block the main thread until a signal is received.
 
 Later phases will extend this sequence with:
-    - Loading :class:`~src.config.settings.AppSettings` from ``.env``.
     - Loading agent configuration from ``config/agents.yaml``.
     - Building the :class:`~src.agents.registry.AgentRegistry`.
     - Starting the Slack Bolt Socket-Mode server in a background thread.
@@ -26,6 +28,7 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from types import FrameType
 
+from src.config import get_settings
 from src.scheduler.runner import SchedulerRunner
 
 # ---------------------------------------------------------------------------
@@ -91,9 +94,20 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    # Phase 1: plain scheduler with default interval (60 s) and UTC timezone.
-    # Phase 2+ will source these values from AppSettings.
-    _runner = SchedulerRunner(interval_seconds=30, timezone="UTC")
+    # Phase 2: load AppSettings from .env (via pydantic-settings).
+    # Interval and timezone are now sourced from the settings model.
+    settings = get_settings()
+    logger.info(
+        "Settings loaded (interval=%ds, timezone=%s, max_dev_agents=%d).",
+        settings.SCHEDULER_INTERVAL_SECONDS,
+        settings.SCHEDULER_TIMEZONE,
+        settings.MAX_CONCURRENT_DEV_AGENTS,
+    )
+
+    _runner = SchedulerRunner(
+        interval_seconds=settings.SCHEDULER_INTERVAL_SECONDS,
+        timezone=settings.SCHEDULER_TIMEZONE,
+    )
     _runner.start()
 
     logger.info("simple-ai-worker is running. Press Ctrl-C to stop.")
