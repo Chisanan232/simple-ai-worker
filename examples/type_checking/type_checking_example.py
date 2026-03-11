@@ -10,7 +10,6 @@ Run MyPy on this file to verify type checking:
 
 from __future__ import annotations
 
-
 # Example 1: Using type annotations with A
 
 
