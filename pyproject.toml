@@ -36,6 +36,9 @@ dependencies = [
     "uvicorn[standard]>=0.41.0",
 ]
 
+[project.scripts]
+simple-ai-worker = "src.main:main"
+
 [project.urls]
 Homepage = "https://github.com/Chisanan232/simple-ai-worker"
 Repository = "https://github.com/Chisanan232/simple-ai-worker"
