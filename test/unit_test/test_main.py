@@ -85,5 +85,3 @@ class TestMain:
             registered_signals = [c.args[0] for c in mock_signal.call_args_list]
             assert signal.SIGINT in registered_signals
             assert signal.SIGTERM in registered_signals
-
-

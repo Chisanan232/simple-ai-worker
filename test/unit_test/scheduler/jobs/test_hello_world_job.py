@@ -34,5 +34,3 @@ class TestHelloWorldJob:
         message: str = caplog.records[0].message
         # UTC ISO timestamp ends with "+00:00"
         assert "+00:00" in message
-
-

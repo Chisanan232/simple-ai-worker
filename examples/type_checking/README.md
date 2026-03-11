@@ -152,11 +152,11 @@ def example_type_guards() -> None:
 def main() -> None:
     """Run all type checking examples."""
     print("=== Type Checking Examples ===\n")
-    
+
     example_basic_types()
     example_protocols()
     example_type_guards()
-    
+
     print("\n✓ All type checking examples completed successfully!")
 
 if __name__ == "__main__":
@@ -173,7 +173,7 @@ Your example should produce clear, structured output:
 Example 1: Basic Types
 ✓ Type annotations working correctly
 
-Example 2: Protocol Types  
+Example 2: Protocol Types
 ✓ Protocol compliance verified
 
 Example 3: Type Guards
@@ -231,7 +231,7 @@ When implementing your type checking examples:
 - Demonstrate Protocol implementations
 - Include examples of generic type parameters
 
-### For Application Projects  
+### For Application Projects
 - Show internal type usage patterns
 - Demonstrate configuration type safety
 - Include data validation examples

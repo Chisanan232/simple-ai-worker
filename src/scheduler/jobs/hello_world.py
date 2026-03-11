@@ -29,4 +29,3 @@ def hello_world_job() -> None:
     """
     now: datetime.datetime = datetime.datetime.now(tz=datetime.timezone.utc)
     logger.info("Hello World from scheduler — %s", now.isoformat())
-

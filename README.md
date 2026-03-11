@@ -79,7 +79,7 @@ jobs:
 ### 💡 Benefits for Projects Using This Template
 
 1. **Reduced Boilerplate**: No need to write complex CI/CD workflows from scratch
-2. **Best Practices**: Workflows follow established patterns and security practices  
+2. **Best Practices**: Workflows follow established patterns and security practices
 3. **Automatic Updates**: Bug fixes and improvements are centrally maintained
 4. **Consistency**: Same workflow behavior across all projects using the template
 5. **Easy Maintenance**: Update workflows in one place, benefits all projects

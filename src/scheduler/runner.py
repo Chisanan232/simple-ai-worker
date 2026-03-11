@@ -137,5 +137,3 @@ class SchedulerRunner:
             f"timezone={self._timezone!r}, "
             f"running={self._scheduler.running!r})"
         )
-
-

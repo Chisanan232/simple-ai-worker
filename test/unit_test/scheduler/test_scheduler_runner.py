@@ -74,9 +74,7 @@ class TestSchedulerRunnerStop:
         runner.stop(wait=False)
         assert runner._scheduler.running is False
 
-    def test_stop_on_not_running_scheduler_logs_warning(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_stop_on_not_running_scheduler_logs_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         """stop() on a never-started scheduler logs a warning and does not raise."""
         import logging
 
@@ -103,5 +101,3 @@ class TestSchedulerRunnerRepr:
         """__repr__ must include the configured timezone."""
         runner = SchedulerRunner(timezone="Asia/Tokyo")
         assert "Asia/Tokyo" in repr(runner)
-
-
