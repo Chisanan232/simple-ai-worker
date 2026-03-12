@@ -8,7 +8,6 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
-
 from src.slack_app.handlers.dev_lead import dev_lead_handler
 from src.slack_app.handlers.planner import planner_handler
 

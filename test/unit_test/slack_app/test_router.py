@@ -7,7 +7,6 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
-
 from src.slack_app.router import role_router
 
 

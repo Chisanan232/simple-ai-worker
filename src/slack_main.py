@@ -97,7 +97,7 @@ async def _run() -> None:
     #   - URL challenge verification (Slack → our server handshake)
     #   - HMAC signature verification on every request
     #   - Event dispatch to registered async handlers
-    await app.start(port=settings.SLACK_PORT)  # type: ignore[misc]
+    await app.start(port=settings.SLACK_PORT)
 
 
 # ---------------------------------------------------------------------------
