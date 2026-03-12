@@ -136,5 +136,5 @@ class CrewBuilder:
         resolved = _PROCESS_MAP.get(process)
         if resolved is None:
             valid = list(_PROCESS_MAP)
-            raise ValueError(f"CrewBuilder: unknown process {process!r}. " f"Valid values: {valid}")
+            raise ValueError(f"CrewBuilder: unknown process {process!r}. Valid values: {valid}")
         return resolved
