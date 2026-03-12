@@ -5,10 +5,10 @@ from pydantic import ValidationError
 
 from src.config.agent_config import AgentConfig, AgentTeamConfig, LLMConfig, LLMOptions
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def _minimal_llm() -> dict:
     return {"provider": "openai", "model": "gpt-4o"}
@@ -32,7 +32,6 @@ def _minimal_team(*agent_ids: str) -> dict:
 # ===========================================================================
 # LLMOptions
 # ===========================================================================
-
 
 class TestLLMOptions:
     def test_defaults(self) -> None:
@@ -84,7 +83,6 @@ class TestLLMOptions:
 # LLMConfig
 # ===========================================================================
 
-
 class TestLLMConfig:
     def test_valid_openai(self) -> None:
         cfg = LLMConfig(provider="openai", model="gpt-4o")
@@ -97,7 +95,7 @@ class TestLLMConfig:
 
     def test_invalid_provider_raises(self) -> None:
         with pytest.raises(ValidationError):
-            LLMConfig(provider="gemini", model="gemini-pro")
+            LLMConfig(provider="gemini", model="gemini-pro")  # type: ignore[arg-type]
 
     def test_blank_model_raises(self) -> None:
         with pytest.raises(ValidationError):
@@ -116,7 +114,7 @@ class TestLLMConfig:
         cfg = LLMConfig(
             provider="openai",
             model="gpt-4o",
-            options={"temperature": 0.1},
+            options={"temperature": 0.1},  # type: ignore[arg-type]
         )
         assert cfg.options.temperature == 0.1
         assert cfg.options.max_tokens == 4096
@@ -125,7 +123,6 @@ class TestLLMConfig:
 # ===========================================================================
 # AgentConfig
 # ===========================================================================
-
 
 class TestAgentConfig:
     def test_minimal_valid_agent(self) -> None:
@@ -186,7 +183,6 @@ class TestAgentConfig:
 # AgentTeamConfig
 # ===========================================================================
 
-
 class TestAgentTeamConfig:
     def test_default_process_is_sequential(self) -> None:
         config = AgentTeamConfig.model_validate(_minimal_team())
@@ -208,7 +204,9 @@ class TestAgentTeamConfig:
         assert len(config.agents) == 1
 
     def test_multiple_unique_agents(self) -> None:
-        config = AgentTeamConfig.model_validate(_minimal_team("planner", "dev_lead", "dev_agent"))
+        config = AgentTeamConfig.model_validate(
+            _minimal_team("planner", "dev_lead", "dev_agent")
+        )
         assert len(config.agents) == 3
 
     def test_empty_agents_raises(self) -> None:
@@ -220,16 +218,22 @@ class TestAgentTeamConfig:
             AgentTeamConfig.model_validate({"process": "sequential"})
 
     def test_duplicate_agent_ids_raise(self) -> None:
-        data: dict = {"agents": [_minimal_agent("planner"), _minimal_agent("planner")]}
+        data: dict = {
+            "agents": [_minimal_agent("planner"), _minimal_agent("planner")]
+        }
         with pytest.raises(ValidationError, match="duplicate"):
             AgentTeamConfig.model_validate(data)
 
     def test_duplicate_id_error_names_the_offender(self) -> None:
-        data: dict = {"agents": [_minimal_agent("dev_agent"), _minimal_agent("dev_agent")]}
+        data: dict = {
+            "agents": [_minimal_agent("dev_agent"), _minimal_agent("dev_agent")]
+        }
         with pytest.raises(ValidationError) as exc_info:
             AgentTeamConfig.model_validate(data)
         assert "dev_agent" in str(exc_info.value)
 
     def test_agents_order_preserved(self) -> None:
-        config = AgentTeamConfig.model_validate(_minimal_team("planner", "dev_lead", "dev_agent"))
+        config = AgentTeamConfig.model_validate(
+            _minimal_team("planner", "dev_lead", "dev_agent")
+        )
         assert [a.id for a in config.agents] == ["planner", "dev_lead", "dev_agent"]

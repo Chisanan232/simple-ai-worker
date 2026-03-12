@@ -13,10 +13,10 @@ from crewai import Process
 
 from src.crew.builder import CrewBuilder
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
 
 def _mock_agent(role: str = "Planner") -> MagicMock:
     a = MagicMock()
@@ -31,7 +31,6 @@ def _mock_task() -> MagicMock:
 # ===========================================================================
 # CrewBuilder._resolve_process
 # ===========================================================================
-
 
 class TestResolveProcess:
     def test_sequential_maps_to_process_enum(self) -> None:
@@ -57,7 +56,6 @@ class TestResolveProcess:
 # ===========================================================================
 # CrewBuilder.build — guard clauses
 # ===========================================================================
-
 
 class TestCrewBuilderGuards:
     def test_empty_agents_raises_value_error(self) -> None:

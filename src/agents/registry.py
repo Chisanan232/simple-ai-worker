@@ -78,7 +78,9 @@ class AgentRegistry:
             agent: The ``crewai.Agent`` instance to store.
         """
         if agent_id in self._agents:
-            logger.warning("AgentRegistry: overwriting existing agent with id=%r.", agent_id)
+            logger.warning(
+                "AgentRegistry: overwriting existing agent with id=%r.", agent_id
+            )
         self._agents[agent_id] = agent
         logger.debug("AgentRegistry: registered agent id=%r, role=%r.", agent_id, agent.role)
 
@@ -96,7 +98,8 @@ class AgentRegistry:
             return self._agents[agent_id]
         except KeyError:
             raise KeyError(
-                f"AgentRegistry: no agent registered with id={agent_id!r}. Available ids: {sorted(self._agents)}"
+                f"AgentRegistry: no agent registered with id={agent_id!r}. "
+                f"Available ids: {sorted(self._agents)}"
             ) from None
 
     def get(self, agent_id: str, default: Optional[Agent] = None) -> Optional[Agent]:
@@ -145,7 +148,10 @@ class AgentRegistry:
         return sorted(self._agents)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(agents={self.agent_ids()!r})"
+        return (
+            f"{self.__class__.__name__}("
+            f"agents={self.agent_ids()!r})"
+        )
 
 
 def build_registry(

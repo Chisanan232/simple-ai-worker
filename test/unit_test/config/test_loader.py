@@ -20,6 +20,7 @@ import pytest
 from src.config.agent_config import AgentTeamConfig
 from src.config.loader import AgentConfigLoadError, load_agent_config
 
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -85,7 +86,6 @@ def _write(tmp_path: Path, content: str, filename: str = "agents.yaml") -> Path:
 # Happy-path tests
 # ===========================================================================
 
-
 class TestLoadAgentConfigHappyPath:
     def test_returns_agent_team_config(self, tmp_path: Path) -> None:
         """load_agent_config() must return an AgentTeamConfig instance."""
@@ -147,14 +147,19 @@ class TestLoadAgentConfigHappyPath:
 
     def test_apps_empty_list_loaded(self, tmp_path: Path) -> None:
         """An empty apps list must be loaded as an empty Python list."""
-        yaml_text = _VALID_YAML.rstrip() + "\n    apps: []\n"
+        yaml_text = (
+            _VALID_YAML.rstrip() + "\n    apps: []\n"
+        )
         path = _write(tmp_path, yaml_text)
         config = load_agent_config(path)
         assert config.agents[0].apps == []
 
     def test_apps_populated_loaded(self, tmp_path: Path) -> None:
         """A populated apps list must be loaded correctly."""
-        yaml_text = _VALID_YAML.rstrip() + "\n    apps:\n      - jira/create_issue\n      - slack/reply_to_thread\n"
+        yaml_text = (
+            _VALID_YAML.rstrip()
+            + "\n    apps:\n      - jira/create_issue\n      - slack/reply_to_thread\n"
+        )
         path = _write(tmp_path, yaml_text)
         config = load_agent_config(path)
         assert config.agents[0].apps == ["jira/create_issue", "slack/reply_to_thread"]
@@ -163,7 +168,6 @@ class TestLoadAgentConfigHappyPath:
 # ===========================================================================
 # Error-path tests
 # ===========================================================================
-
 
 class TestLoadAgentConfigErrors:
     def test_missing_file_raises_load_error(self, tmp_path: Path) -> None:
@@ -223,7 +227,9 @@ agents:
         with pytest.raises(AgentConfigLoadError):
             load_agent_config(path)
 
-    def test_schema_validation_error_chained_pydantic_error(self, tmp_path: Path) -> None:
+    def test_schema_validation_error_chained_pydantic_error(
+        self, tmp_path: Path
+    ) -> None:
         """The original pydantic ValidationError must be chained as __cause__."""
         from pydantic import ValidationError
 
