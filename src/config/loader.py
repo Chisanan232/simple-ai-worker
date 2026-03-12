@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Union
+from typing import List
 
 import yaml
 from pydantic import ValidationError
@@ -81,13 +81,13 @@ class AgentConfigLoadError(Exception):
         message: Human-readable description of the failure.
     """
 
-    def __init__(self, path: Union[str, Path], message: str) -> None:
+    def __init__(self, path: str | Path, message: str) -> None:
         self.path = Path(path)
         self.message = message
         super().__init__(f"[{self.path}] {message}")
 
 
-def load_agent_config(path: Union[str, Path]) -> AgentTeamConfig:
+def load_agent_config(path: str | Path) -> AgentTeamConfig:
     """Load and validate the YAML agent configuration file.
 
     Reads the file at *path*, parses it with ``yaml.safe_load``, and
