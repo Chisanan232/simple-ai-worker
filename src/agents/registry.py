@@ -130,7 +130,7 @@ class AgentRegistry:
         Returns:
             An iterator of ``(str, crewai.Agent)`` tuples.
         """
-        return iter(self._agents.items())  # type: ignore[return-value]
+        return iter(self._agents.items())
 
     # ------------------------------------------------------------------
     # Helpers

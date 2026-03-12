@@ -15,7 +15,6 @@ from __future__ import annotations
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
-
 from src.agents.llm_factory import LLMFactory
 from src.config.agent_config import LLMConfig, LLMOptions
 from src.config.settings import AppSettings
@@ -35,7 +34,7 @@ def _make_settings(
         env["OPENAI_API_KEY"] = openai_key
     if anthropic_key:
         env["ANTHROPIC_API_KEY"] = anthropic_key
-    return AppSettings(**env)  # type: ignore[arg-type]
+    return AppSettings(**env)
 
 
 def _make_llm_config(
@@ -47,7 +46,7 @@ def _make_llm_config(
     timeout: int = 120,
 ) -> LLMConfig:
     return LLMConfig(
-        provider=provider,  # type: ignore[arg-type]
+        provider=provider,
         model=model,
         options=LLMOptions(
             temperature=temperature,

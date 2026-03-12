@@ -34,7 +34,7 @@ def _make_agent_config(
         goal=goal,
         backstory=backstory,
         llm=LLMConfig(
-            provider=provider,  # type: ignore[arg-type]
+            provider=provider,
             model=model,
             options=LLMOptions(),
         ),
@@ -45,7 +45,7 @@ def _make_agent_config(
 
 
 def _make_settings(openai_key: str = "sk-test") -> AppSettings:
-    return AppSettings(OPENAI_API_KEY=openai_key)  # type: ignore[arg-type]
+    return AppSettings(OPENAI_API_KEY=openai_key)
 
 
 # ===========================================================================

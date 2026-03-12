@@ -32,7 +32,7 @@ def _make_agent_cfg(agent_id: str, role: str = "Planner") -> AgentConfig:
         role=role,
         goal="Do stuff.",
         backstory="A person.",
-        llm=LLMConfig(provider="openai", model="gpt-4o", options=LLMOptions()),  # type: ignore[arg-type]
+        llm=LLMConfig(provider="openai", model="gpt-4o", options=LLMOptions()),
     )
 
 
@@ -41,7 +41,7 @@ def _make_team(*agent_ids: str) -> AgentTeamConfig:
 
 
 def _make_settings() -> AppSettings:
-    return AppSettings(OPENAI_API_KEY="sk-test")  # type: ignore[arg-type]
+    return AppSettings(OPENAI_API_KEY="sk-test")
 
 
 # ===========================================================================
