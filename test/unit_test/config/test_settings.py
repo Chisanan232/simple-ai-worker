@@ -164,7 +164,7 @@ class TestAppSettingsValidation:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            AppSettings(DEFAULT_LLM_PROVIDER="gemini")  # type: ignore[arg-type]
+            AppSettings(DEFAULT_LLM_PROVIDER="gemini")
 
     def test_scheduler_interval_must_be_int(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """SCHEDULER_INTERVAL_SECONDS must be coercible to int; invalid str raises."""
