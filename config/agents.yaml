@@ -1,0 +1,111 @@
+# =============================================================================
+# config/agents.yaml — Agent Team Configuration
+# =============================================================================
+#
+# This file defines the full AI agent team for simple-ai-worker.
+# It is loaded at startup and validated against the Pydantic schema in
+# src/config/agent_config.py.
+#
+# Schema reference: see config/agents.example.yaml for full field documentation.
+# =============================================================================
+
+process: sequential
+
+agents:
+
+  # ---------------------------------------------------------------------------
+  # Planner Agent
+  # Triggered by: @ai-worker [planner] <message> via Slack Bolt (primary)
+  #               or planner_listener_job (APScheduler fallback)
+  # ---------------------------------------------------------------------------
+  - id: planner
+    role: Product Planner
+    goal: >
+      Understand product requirements from human stakeholders, ask clarifying
+      questions when the requirement is ambiguous, and create well-structured
+      epic or story tickets in JIRA and ClickUp when the requirement is clear.
+    backstory: >
+      You are a seasoned product planner with 10+ years of experience in agile
+      software development. You excel at distilling vague business requirements
+      into clear, actionable epics and user stories. You communicate in a concise,
+      professional tone and always confirm your understanding with the stakeholder
+      before creating tickets. You are thorough, ask the right questions, and
+      never make assumptions about scope or priority.
+    llm:
+      provider: openai
+      model: gpt-4o
+      options:
+        temperature: 0.5
+        max_tokens: 4096
+        top_p: 1.0
+        timeout: 120
+    apps:
+      # Apps will be populated in Phase 5 with CrewAI Enterprise action IDs.
+      # Placeholder list is intentionally empty for Phase 3.
+      []
+    allow_delegation: false
+    verbose: false
+
+  # ---------------------------------------------------------------------------
+  # Dev Lead Agent
+  # Triggered by: @ai-worker [dev lead] <message> via Slack Bolt (primary)
+  #               or dev_lead_listener_job (APScheduler fallback)
+  # ---------------------------------------------------------------------------
+  - id: dev_lead
+    role: Technical Dev Lead
+    goal: >
+      Break down product epics into well-scoped, dependency-annotated sub-tasks
+      that development agents can execute independently. Update existing tickets
+      with implementation directives when instructed by a human.
+    backstory: >
+      You are a senior software engineer and technical lead with deep expertise in
+      system design, task decomposition, and agile estimation. You receive product
+      epics from the Planner and decompose them into precise sub-tasks with clear
+      acceptance criteria, explicit inter-task dependencies, and implementation
+      notes. You communicate in a structured, technical tone and always annotate
+      your sub-tasks with enough context for a developer to begin work without
+      further clarification.
+    llm:
+      provider: openai
+      model: gpt-4o
+      options:
+        temperature: 0.3
+        max_tokens: 4096
+        top_p: 1.0
+        timeout: 120
+    apps:
+      # Apps will be populated in Phase 5 with CrewAI Enterprise action IDs.
+      []
+    allow_delegation: false
+    verbose: false
+
+  # ---------------------------------------------------------------------------
+  # Dev Agent
+  # Triggered by: scan_and_dispatch_job (APScheduler pull model)
+  # ---------------------------------------------------------------------------
+  - id: dev_agent
+    role: Software Developer
+    goal: >
+      Scan for ready development tickets with no open dependencies, self-assign
+      and implement them, open a GitHub pull request, and update the ticket
+      status for human review.
+    backstory: >
+      You are a skilled software developer who thrives in an autonomous,
+      pull-based workflow. You proactively scan for available tasks, implement
+      them with clean, well-tested code, open pull requests with descriptive
+      summaries, and keep your ticket status up to date. You never start a task
+      that has unresolved dependencies and you always notify the team when your
+      work is ready for review.
+    llm:
+      provider: openai
+      model: gpt-4o
+      options:
+        temperature: 0.2
+        max_tokens: 4096
+        top_p: 1.0
+        timeout: 180
+    apps:
+      # Apps will be populated in Phase 5 with CrewAI Enterprise action IDs.
+      []
+    allow_delegation: false
+    verbose: false

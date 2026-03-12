@@ -1,0 +1,192 @@
+# =============================================================================
+# config/agents.example.yaml — Annotated Agent Team Configuration Template
+# =============================================================================
+#
+# This file is a fully annotated copy of agents.yaml.
+# Copy it to agents.yaml (or the path set in AGENT_CONFIG_PATH) and customise
+# the values to suit your deployment.
+#
+#   cp config/agents.example.yaml config/agents.yaml
+#
+# YAML is loaded by src/config/loader.py and validated by the Pydantic models
+# in src/config/agent_config.py.  The application fails fast with a clear
+# error if this file is malformed or missing required fields.
+#
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# process  (optional, default: "sequential")
+# -----------------------------------------------------------------------------
+# Controls how CrewAI executes tasks within a crew.
+#
+#   sequential    — tasks run one after another in the order listed.
+#                   Simple and predictable; suitable for most use-cases.
+#
+#   hierarchical  — a "manager" agent is injected automatically by CrewAI to
+#                   delegate and coordinate sub-tasks.  More powerful but
+#                   requires the manager LLM to be capable of function-calling.
+#
+process: sequential
+
+
+# -----------------------------------------------------------------------------
+# agents  (required, must contain at least one entry)
+# -----------------------------------------------------------------------------
+# A list of agent definitions.  Each agent maps to a single crewai.Agent
+# instance built by src/agents/factory.py in Phase 4.
+#
+# All agent `id` values must be unique within this file.
+#
+agents:
+
+  # ---------------------------------------------------------------------------
+  # Example agent entry — annotated field-by-field
+  # ---------------------------------------------------------------------------
+  - # id  (required, string, must be unique)
+    # Unique identifier for this agent.  Used as the dictionary key in
+    # AgentRegistry (Phase 4).  Stick to snake_case for clarity.
+    # Examples: "planner", "dev_lead", "dev_agent", "qa_agent"
+    id: planner
+
+    # role  (required, string)
+    # Short role title passed to crewai.Agent as the `role` argument.
+    # This appears in CrewAI's logging and in the LLM system prompt.
+    # Examples: "Product Planner", "Technical Dev Lead", "Software Developer"
+    role: Product Planner
+
+    # goal  (required, string)
+    # One-sentence (or short paragraph) goal statement.
+    # Tells the agent what it is ultimately trying to achieve.
+    # YAML block scalar (>) folds newlines into spaces — good for long text.
+    goal: >
+      Understand product requirements from human stakeholders and create
+      well-structured epic or story tickets in JIRA and ClickUp.
+
+    # backstory  (required, string)
+    # Multi-sentence persona / background story.
+    # Fed to the LLM as part of the system prompt to shape the agent's
+    # tone, expertise, and behaviour.
+    backstory: >
+      You are a seasoned product planner with 10+ years of experience in agile
+      software development. You excel at distilling vague business requirements
+      into clear, actionable epics and user stories.
+
+    # llm  (required, object)
+    # Language model configuration for this agent.
+    llm:
+
+      # provider  (required, one of: "openai" | "anthropic")
+      # Selects which LLM backend to use.
+      # The corresponding API key must be set in .env:
+      #   openai    → OPENAI_API_KEY
+      #   anthropic → ANTHROPIC_API_KEY
+      provider: openai
+
+      # model  (required, string)
+      # The model identifier passed to crewai.LLM.
+      # OpenAI examples:    gpt-4o, gpt-4o-mini, gpt-4-turbo, o1-preview
+      # Anthropic examples: claude-3-5-sonnet-latest, claude-3-opus-latest
+      model: gpt-4o
+
+      # options  (optional — all sub-fields have defaults)
+      # Fine-grained generation parameters.
+      options:
+
+        # temperature  (float, 0.0–2.0, default: 0.7)
+        # Higher → more creative/random.  Lower → more deterministic.
+        # Recommended ranges:
+        #   planner / lead  → 0.3–0.6  (structured output preferred)
+        #   dev agent       → 0.1–0.3  (code generation, low randomness)
+        temperature: 0.5
+
+        # max_tokens  (int, >0, default: 4096)
+        # Maximum tokens the model may generate in a single response.
+        max_tokens: 4096
+
+        # top_p  (float, (0.0, 1.0], default: 1.0)
+        # Nucleus sampling parameter.  1.0 disables it (all tokens eligible).
+        top_p: 1.0
+
+        # timeout  (int, seconds, >0, default: 120)
+        # HTTP timeout for a single LLM API call.
+        # Increase for complex tasks that may take longer to respond.
+        timeout: 120
+
+    # apps  (optional, list of strings, default: [])
+    # List of CrewAI Enterprise native action IDs to attach to this agent.
+    # Passed directly to crewai.Agent(apps=[...]).
+    # Action IDs are populated in Phase 5.
+    #
+    # Format: "<service>/<action>"
+    # Examples:
+    #   - jira/create_issue
+    #   - jira/search_issues
+    #   - jira/update_issue
+    #   - jira/transition_issue
+    #   - clickup/create_task
+    #   - clickup/search_tasks
+    #   - clickup/update_task
+    #   - github/create_pull_request
+    #   - github/search_repositories
+    #   - slack/send_message
+    #   - slack/reply_to_thread
+    #   - slack/get_messages
+    #
+    # Leave empty ([]) until Phase 5 — agents work without tools in earlier phases.
+    apps: []
+
+    # allow_delegation  (bool, default: false)
+    # Whether this agent may delegate tasks to other agents in the same crew.
+    # Set to true only for hierarchical process managers.
+    allow_delegation: false
+
+    # verbose  (bool, default: false)
+    # Whether CrewAI prints step-by-step reasoning output for this agent.
+    # Useful for debugging but noisy in production.
+    verbose: false
+
+  # ---------------------------------------------------------------------------
+  # Additional agents follow the same structure — add as many as needed.
+  # ---------------------------------------------------------------------------
+
+  - id: dev_lead
+    role: Technical Dev Lead
+    goal: >
+      Break down product epics into well-scoped, dependency-annotated sub-tasks
+      that development agents can execute independently.
+    backstory: >
+      You are a senior software engineer and technical lead with deep expertise in
+      system design, task decomposition, and agile estimation.
+    llm:
+      provider: openai
+      model: gpt-4o
+      options:
+        temperature: 0.3
+        max_tokens: 4096
+        top_p: 1.0
+        timeout: 120
+    apps: []
+    allow_delegation: false
+    verbose: false
+
+  - id: dev_agent
+    role: Software Developer
+    goal: >
+      Scan for ready development tickets, implement them, open GitHub pull
+      requests, and update ticket status for human review.
+    backstory: >
+      You are a skilled software developer who thrives in an autonomous,
+      pull-based workflow. You proactively scan for available tasks and
+      implement them with clean, well-tested code.
+    llm:
+      provider: openai
+      model: gpt-4o
+      options:
+        temperature: 0.2
+        max_tokens: 4096
+        top_p: 1.0
+        timeout: 180
+    apps: []
+    allow_delegation: false
+    verbose: false
