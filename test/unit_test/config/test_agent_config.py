@@ -97,7 +97,7 @@ class TestLLMConfig:
 
     def test_invalid_provider_raises(self) -> None:
         with pytest.raises(ValidationError):
-            LLMConfig(provider="gemini", model="gemini-pro")  # type: ignore[arg-type]
+            LLMConfig(provider="gemini", model="gemini-pro")
 
     def test_blank_model_raises(self) -> None:
         with pytest.raises(ValidationError):
@@ -116,7 +116,7 @@ class TestLLMConfig:
         cfg = LLMConfig(
             provider="openai",
             model="gpt-4o",
-            options={"temperature": 0.1},  # type: ignore[arg-type]
+            options={"temperature": 0.1},
         )
         assert cfg.options.temperature == 0.1
         assert cfg.options.max_tokens == 4096
