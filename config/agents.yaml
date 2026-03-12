@@ -109,4 +109,3 @@ agents:
       []
     allow_delegation: false
     verbose: false
-

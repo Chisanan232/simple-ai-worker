@@ -155,9 +155,7 @@ class AgentConfig(BaseModel):
         if isinstance(value, list):
             for item in value:
                 if isinstance(item, str) and not item.strip():
-                    raise ValueError(
-                        "AgentConfig.apps must not contain blank action ID strings."
-                    )
+                    raise ValueError("AgentConfig.apps must not contain blank action ID strings.")
         return value
 
 
@@ -194,4 +192,3 @@ class AgentTeamConfig(BaseModel):
                 f"{sorted(set(duplicates))}.  Every agent id must be unique."
             )
         return self
-

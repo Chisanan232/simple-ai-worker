@@ -165,4 +165,3 @@ def load_agent_config(path: Union[str, Path]) -> AgentTeamConfig:
         ", ".join(a.id for a in config.agents),
     )
     return config
-
