@@ -134,7 +134,13 @@ agents:
     #   - slack/get_messages
     #
     # Leave empty ([]) until Phase 5 — agents work without tools in earlier phases.
-    apps: []
+    apps:
+      - jira/create_issue
+      - jira/search_issues
+      - clickup/create_task
+      - clickup/search_tasks
+      - slack/send_message
+      - slack/reply_to_thread
 
     # allow_delegation  (bool, default: false)
     # Whether this agent may delegate tasks to other agents in the same crew.
@@ -166,7 +172,16 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 120
-    apps: []
+    apps:
+      - jira/search_issues
+      - jira/create_issue
+      - jira/update_issue
+      - jira/transition_issue
+      - clickup/search_tasks
+      - clickup/create_task
+      - clickup/update_task
+      - slack/send_message
+      - slack/reply_to_thread
     allow_delegation: false
     verbose: false
 
@@ -187,6 +202,14 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 180
-    apps: []
+    apps:
+      - jira/search_issues
+      - jira/update_issue
+      - jira/transition_issue
+      - clickup/search_tasks
+      - clickup/update_task
+      - github/create_pull_request
+      - github/search_repositories
+      - slack/send_message
     allow_delegation: false
     verbose: false
