@@ -23,4 +23,3 @@ __all__: List[str] = [
     "AgentRegistry",
     "build_registry",
 ]
-

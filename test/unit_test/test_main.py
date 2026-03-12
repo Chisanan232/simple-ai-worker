@@ -228,4 +228,3 @@ class TestMain:
             main_module.main()
 
         assert main_module._registry is fake_registry
-

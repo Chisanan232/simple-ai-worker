@@ -147,4 +147,3 @@ class LLMFactory:
             return None
 
         return secret.get_secret_value() if secret is not None else None
-

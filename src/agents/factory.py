@@ -85,4 +85,3 @@ class AgentFactory:
             allow_delegation=agent_config.allow_delegation,
             verbose=agent_config.verbose,
         )
-

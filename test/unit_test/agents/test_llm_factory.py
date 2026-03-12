@@ -15,16 +15,15 @@ from __future__ import annotations
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from src.agents.llm_factory import LLMFactory
 from src.config.agent_config import LLMConfig, LLMOptions
 from src.config.settings import AppSettings
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_settings(
     openai_key: Optional[str] = None,
@@ -63,6 +62,7 @@ def _make_llm_config(
 # _model_string (private, pure helper — no mock needed)
 # ===========================================================================
 
+
 class TestModelString:
     def test_openai_format(self) -> None:
         assert LLMFactory._model_string("openai", "gpt-4o") == "openai/gpt-4o"
@@ -83,6 +83,7 @@ class TestModelString:
 # ===========================================================================
 # _resolve_api_key (private, pure helper — no mock needed)
 # ===========================================================================
+
 
 class TestResolveApiKey:
     def test_openai_key_returned_when_set(self) -> None:
@@ -114,6 +115,7 @@ class TestResolveApiKey:
 # ===========================================================================
 # LLMFactory.build (patched crewai.LLM)
 # ===========================================================================
+
 
 class TestLLMFactoryBuild:
     """Tests for LLMFactory.build() — crewai.LLM is patched throughout."""
@@ -218,4 +220,3 @@ class TestLLMFactoryBuild:
         call_kwargs = MockLLM.call_args.kwargs
         assert call_kwargs["model"] == "anthropic/claude-3-5-sonnet-latest"
         assert call_kwargs.get("api_key") == "sk-ant-test"
-

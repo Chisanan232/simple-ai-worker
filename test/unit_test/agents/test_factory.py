@@ -12,10 +12,10 @@ from src.agents.factory import AgentFactory
 from src.config.agent_config import AgentConfig, LLMConfig, LLMOptions
 from src.config.settings import AppSettings
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_agent_config(
     agent_id: str = "planner",
@@ -51,6 +51,7 @@ def _make_settings(openai_key: str = "sk-test") -> AppSettings:
 # ===========================================================================
 # AgentFactory.build
 # ===========================================================================
+
 
 class TestAgentFactoryBuild:
     """Tests for AgentFactory.build() — crewai.Agent and crewai.LLM patched."""
@@ -213,4 +214,3 @@ class TestAgentFactoryBuild:
 
         kwargs = MockAgent.call_args.kwargs
         assert kwargs["llm"] is mock_llm
-

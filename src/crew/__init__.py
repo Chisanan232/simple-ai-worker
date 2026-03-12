@@ -14,4 +14,3 @@ from typing import List
 from .builder import CrewBuilder
 
 __all__: List[str] = ["CrewBuilder"]
-

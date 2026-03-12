@@ -15,10 +15,10 @@ from src.agents.registry import AgentRegistry, build_registry
 from src.config.agent_config import AgentConfig, AgentTeamConfig, LLMConfig, LLMOptions
 from src.config.settings import AppSettings
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_agent(role: str = "Planner") -> MagicMock:
     agent = MagicMock()
@@ -47,6 +47,7 @@ def _make_settings() -> AppSettings:
 # ===========================================================================
 # AgentRegistry — basic container operations
 # ===========================================================================
+
 
 class TestAgentRegistryBasics:
     def test_empty_registry_has_len_zero(self) -> None:
@@ -153,6 +154,7 @@ class TestAgentRegistryBasics:
 # build_registry
 # ===========================================================================
 
+
 class TestBuildRegistry:
     """Tests for the build_registry() convenience function."""
 
@@ -220,4 +222,3 @@ class TestBuildRegistry:
             build_registry(team, settings)
 
         assert MockAgent.call_count == 2
-

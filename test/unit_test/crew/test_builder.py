@@ -13,10 +13,10 @@ from crewai import Process
 
 from src.crew.builder import CrewBuilder
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_agent(role: str = "Planner") -> MagicMock:
     a = MagicMock()
@@ -31,6 +31,7 @@ def _mock_task() -> MagicMock:
 # ===========================================================================
 # CrewBuilder._resolve_process
 # ===========================================================================
+
 
 class TestResolveProcess:
     def test_sequential_maps_to_process_enum(self) -> None:
@@ -57,6 +58,7 @@ class TestResolveProcess:
 # CrewBuilder.build — guard clauses
 # ===========================================================================
 
+
 class TestCrewBuilderGuards:
     def test_empty_agents_raises_value_error(self) -> None:
         with pytest.raises(ValueError, match="at least one agent"):
@@ -81,6 +83,7 @@ class TestCrewBuilderGuards:
 # ===========================================================================
 # CrewBuilder.build — happy paths (crewai.Crew patched)
 # ===========================================================================
+
 
 class TestCrewBuilderBuild:
     def test_build_returns_crew_instance(self) -> None:
@@ -155,4 +158,3 @@ class TestCrewBuilderBuild:
         kwargs = MockCrew.call_args.kwargs
         assert len(kwargs["agents"]) == 3
         assert len(kwargs["tasks"]) == 5
-
