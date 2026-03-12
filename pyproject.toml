@@ -28,6 +28,8 @@ dependencies = [
     "apscheduler>=3.11.2",
     # AI agent framework
     "crewai>=1.10.1",
+    # CrewAI Enterprise native tool resolution (Agent(apps=[...]))
+    "crewai-tools>=1.10.1",
     # Data validation for data models
     "pydantic>=2.11.10",
     "pydantic-settings>=2.10.1",
