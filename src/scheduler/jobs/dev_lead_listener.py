@@ -126,7 +126,7 @@ def dev_lead_listener_job(
         dev_lead_agent = registry["dev_lead"]
     except KeyError:
         logger.error(
-            "dev_lead_listener_job: 'dev_lead' agent not found in registry — " "available ids: %s. Skipping run.",
+            "dev_lead_listener_job: 'dev_lead' agent not found in registry — available ids: %s. Skipping run.",
             registry.agent_ids(),
         )
         return

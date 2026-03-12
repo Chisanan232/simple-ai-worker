@@ -217,7 +217,7 @@ class SchedulerRunner:
             )
             logger.debug("Registered job: %s (id=%s).", dev_lead_job.name, dev_lead_job.id)
 
-            logger.info("Phase-6 scheduler jobs registered: scan_and_dispatch, " "planner_listener, dev_lead_listener.")
+            logger.info("Phase-6 scheduler jobs registered: scan_and_dispatch, planner_listener, dev_lead_listener.")
         else:
             logger.info(
                 "Phase-6 scheduler jobs NOT registered "

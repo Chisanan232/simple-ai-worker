@@ -147,7 +147,7 @@ def create_bolt_app(
         role_router(event=event, say=say, registry=registry, executor=executor)
 
     logger.info(
-        "Slack Bolt AsyncApp created (Events API). " "Call `await app.start(port=...)` to begin serving requests."
+        "Slack Bolt AsyncApp created (Events API). Call `await app.start(port=...)` to begin serving requests."
     )
 
     return app

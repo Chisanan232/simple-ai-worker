@@ -187,7 +187,7 @@ def scan_and_dispatch_job(
         dev_agent = registry["dev_agent"]
     except KeyError:
         logger.error(
-            "scan_and_dispatch_job: 'dev_agent' not found in registry — " "available ids: %s. Skipping run.",
+            "scan_and_dispatch_job: 'dev_agent' not found in registry — available ids: %s. Skipping run.",
             registry.agent_ids(),
         )
         return
@@ -225,7 +225,7 @@ def scan_and_dispatch_job(
         tickets: list[dict] = json.loads(raw_output)
     except json.JSONDecodeError:
         logger.warning(
-            "scan_and_dispatch_job: could not parse scanner output as JSON. " "Raw output (first 500 chars): %.500s",
+            "scan_and_dispatch_job: could not parse scanner output as JSON. Raw output (first 500 chars): %.500s",
             raw_output,
         )
         return
