@@ -1,19 +1,21 @@
 """
 Application entry-point for simple-ai-worker.
 
-Startup sequence (Phase 2):
+Startup sequence (Phase 4):
     1. Configure root logging.
     2. Load :class:`~src.config.settings.AppSettings` from ``.env`` via
        :func:`~src.config.get_settings`.
     3. Register ``SIGINT`` / ``SIGTERM`` handlers for graceful shutdown.
-    4. Instantiate :class:`~src.scheduler.runner.SchedulerRunner` using
+    4. Load :class:`~src.config.agent_config.AgentTeamConfig` from YAML via
+       :func:`~src.config.load_agent_config`.
+    5. Build the :class:`~src.agents.registry.AgentRegistry` via
+       :func:`~src.agents.registry.build_registry`.
+    6. Instantiate :class:`~src.scheduler.runner.SchedulerRunner` using
        values from :class:`~src.config.settings.AppSettings`.
-    5. Start the scheduler.
-    6. Block the main thread until a signal is received.
+    7. Start the scheduler.
+    8. Block the main thread until a signal is received.
 
 Later phases will extend this sequence with:
-    - Loading agent configuration from ``config/agents.yaml``.
-    - Building the :class:`~src.agents.registry.AgentRegistry`.
     - Starting the Slack Bolt Socket-Mode server in a background thread.
 """
 
@@ -28,7 +30,8 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from types import FrameType
 
-from src.config import get_settings
+from src.agents.registry import AgentRegistry, build_registry
+from src.config import get_settings, load_agent_config
 from src.scheduler.runner import SchedulerRunner
 
 # ---------------------------------------------------------------------------
@@ -54,6 +57,7 @@ logger = logging.getLogger(__name__)
 # Shared flag: set to True by signal handlers to break the main loop.
 _shutdown_requested: bool = False
 _runner: Optional[SchedulerRunner] = None
+_registry: Optional[AgentRegistry] = None
 
 
 def _handle_signal(signum: int, frame: Optional[FrameType]) -> None:  # noqa: ARG001
@@ -86,7 +90,7 @@ def main() -> None:
     Returns:
         None
     """
-    global _runner  # noqa: PLW0603
+    global _runner, _registry  # noqa: PLW0603
 
     logger.info("simple-ai-worker starting …")
 
@@ -95,13 +99,21 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
 
     # Phase 2: load AppSettings from .env (via pydantic-settings).
-    # Interval and timezone are now sourced from the settings model.
     settings = get_settings()
     logger.info(
         "Settings loaded (interval=%ds, timezone=%s, max_dev_agents=%d).",
         settings.SCHEDULER_INTERVAL_SECONDS,
         settings.SCHEDULER_TIMEZONE,
         settings.MAX_CONCURRENT_DEV_AGENTS,
+    )
+
+    # Phase 4: load agent team config and build the registry.
+    agent_team = load_agent_config(settings.AGENT_CONFIG_PATH)
+    _registry = build_registry(agent_team, settings)
+    logger.info(
+        "Agent registry ready: %d agent(s) — %s.",
+        len(_registry),
+        ", ".join(_registry.agent_ids()),
     )
 
     _runner = SchedulerRunner(
