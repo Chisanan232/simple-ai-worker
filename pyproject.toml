@@ -41,6 +41,7 @@ dependencies = [
 
 [project.scripts]
 simple-ai-worker = "src.main:main"
+simple-ai-slack  = "src.slack_main:main"
 
 [project.urls]
 Homepage = "https://github.com/Chisanan232/simple-ai-worker"
