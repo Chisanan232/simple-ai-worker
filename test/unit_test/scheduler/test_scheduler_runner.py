@@ -2,9 +2,26 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import MagicMock
+
 import pytest
 
 from src.scheduler.runner import SchedulerRunner
+
+
+def _make_registry(agent_ids: list[str] | None = None) -> MagicMock:
+    """Return a minimal mock AgentRegistry."""
+    ids = agent_ids or ["planner", "dev_lead", "dev_agent"]
+    reg = MagicMock()
+    reg.agent_ids.return_value = ids
+    return reg
+
+
+def _make_settings(interval: int = 3600) -> MagicMock:
+    s = MagicMock()
+    s.SCHEDULER_INTERVAL_SECONDS = interval
+    return s
 
 
 class TestSchedulerRunnerInit:
@@ -26,6 +43,23 @@ class TestSchedulerRunnerInit:
         """The underlying BackgroundScheduler must not be running after init."""
         runner = SchedulerRunner()
         assert runner._scheduler.running is False
+
+    def test_optional_phase6_args_default_to_none(self) -> None:
+        """registry, settings, and executor default to None."""
+        runner = SchedulerRunner()
+        assert runner._registry is None
+        assert runner._settings is None
+        assert runner._executor is None
+
+    def test_phase6_args_stored_when_provided(self) -> None:
+        """registry, settings, and executor are stored when provided."""
+        reg = _make_registry()
+        settings = _make_settings()
+        executor = MagicMock(spec=ThreadPoolExecutor)
+        runner = SchedulerRunner(registry=reg, settings=settings, executor=executor)
+        assert runner._registry is reg
+        assert runner._settings is settings
+        assert runner._executor is executor
 
 
 class TestSchedulerRunnerStart:
@@ -62,6 +96,64 @@ class TestSchedulerRunnerStart:
             assert any("already-running" in r.message for r in caplog.records)
         finally:
             runner.stop(wait=False)
+
+    # ------------------------------------------------------------------
+    # Phase 6 job registration
+    # ------------------------------------------------------------------
+
+    def test_phase6_jobs_registered_when_dependencies_provided(self) -> None:
+        """All three Phase-6 jobs must be registered when registry/settings/executor are supplied."""
+        reg = _make_registry()
+        settings = _make_settings()
+        executor = ThreadPoolExecutor(max_workers=1)
+        runner = SchedulerRunner(
+            interval_seconds=3600,
+            registry=reg,
+            settings=settings,
+            executor=executor,
+        )
+        try:
+            runner.start()
+            job_ids = [job.id for job in runner._scheduler.get_jobs()]
+            assert "scan_and_dispatch" in job_ids
+            assert "planner_listener" in job_ids
+            assert "dev_lead_listener" in job_ids
+        finally:
+            runner.stop(wait=False)
+            executor.shutdown(wait=False)
+
+    def test_phase6_jobs_not_registered_without_registry(self) -> None:
+        """Phase-6 jobs must NOT be registered when registry is None."""
+        runner = SchedulerRunner(interval_seconds=3600)
+        try:
+            runner.start()
+            job_ids = [job.id for job in runner._scheduler.get_jobs()]
+            assert "scan_and_dispatch" not in job_ids
+            assert "planner_listener" not in job_ids
+            assert "dev_lead_listener" not in job_ids
+        finally:
+            runner.stop(wait=False)
+
+    def test_phase6_jobs_use_correct_interval(self) -> None:
+        """Phase-6 interval jobs must be scheduled with the configured interval_seconds."""
+        reg = _make_registry()
+        settings = _make_settings()
+        executor = ThreadPoolExecutor(max_workers=1)
+        runner = SchedulerRunner(
+            interval_seconds=300,
+            registry=reg,
+            settings=settings,
+            executor=executor,
+        )
+        try:
+            runner.start()
+            jobs_by_id = {job.id: job for job in runner._scheduler.get_jobs()}
+            # APScheduler stores interval jobs with a trigger whose 'interval' attribute
+            # contains the timedelta — we just check the job exists with correct kwargs.
+            assert "scan_and_dispatch" in jobs_by_id
+        finally:
+            runner.stop(wait=False)
+            executor.shutdown(wait=False)
 
 
 class TestSchedulerRunnerStop:

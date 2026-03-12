@@ -39,12 +39,14 @@ class TestMain:
         main_module._shutdown_requested = False
         main_module._runner = None
         main_module._registry = None
+        main_module._executor = None
 
     def teardown_method(self) -> None:
         """Reset shared globals after each test."""
         main_module._shutdown_requested = False
         main_module._runner = None
         main_module._registry = None
+        main_module._executor = None
 
     # ------------------------------------------------------------------
     # Helpers
@@ -111,6 +113,7 @@ class TestMain:
             patch("src.main.load_agent_config", return_value=MagicMock()),
             patch("src.main.build_registry", return_value=fake_registry),
             patch("src.main.SchedulerRunner") as MockRunner,
+            patch("src.main.ThreadPoolExecutor") as MockExecutor,
             patch("src.main.time.sleep", side_effect=fake_sleep),
             patch("src.main.signal.signal"),
         ):
@@ -119,7 +122,14 @@ class TestMain:
 
             main_module.main()
 
-            MockRunner.assert_called_once_with(interval_seconds=60, timezone="UTC")
+            # Verify SchedulerRunner was called with the right positional kwargs.
+            call_kwargs = MockRunner.call_args.kwargs
+            assert call_kwargs["interval_seconds"] == 60
+            assert call_kwargs["timezone"] == "UTC"
+            assert call_kwargs["registry"] is fake_registry
+            assert call_kwargs["settings"] is fake_settings
+            # executor should be the return value of ThreadPoolExecutor()
+            assert call_kwargs["executor"] is MockExecutor.return_value
             mock_instance.start.assert_called_once()
             mock_instance.stop.assert_called_once_with(wait=True)
 
@@ -136,11 +146,14 @@ class TestMain:
             patch("src.main.load_agent_config", return_value=MagicMock()),
             patch("src.main.build_registry", return_value=fake_registry),
             patch("src.main.SchedulerRunner") as MockRunner,
+            patch("src.main.ThreadPoolExecutor"),
             patch("src.main.time.sleep", side_effect=fast_exit),
             patch("src.main.signal.signal"),
         ):
             main_module.main()
-            MockRunner.assert_called_once_with(interval_seconds=120, timezone="Asia/Taipei")
+            call_kwargs = MockRunner.call_args.kwargs
+            assert call_kwargs["interval_seconds"] == 120
+            assert call_kwargs["timezone"] == "Asia/Taipei"
 
     def test_main_registers_signal_handlers(self) -> None:
         """main() must register handlers for SIGINT and SIGTERM."""
@@ -155,6 +168,7 @@ class TestMain:
             patch("src.main.load_agent_config", return_value=MagicMock()),
             patch("src.main.build_registry", return_value=fake_registry),
             patch("src.main.SchedulerRunner"),
+            patch("src.main.ThreadPoolExecutor"),
             patch("src.main.time.sleep", side_effect=fast_exit),
             patch("src.main.signal.signal") as mock_signal,
         ):
@@ -181,6 +195,7 @@ class TestMain:
             patch("src.main.load_agent_config", return_value=MagicMock()) as mock_load,
             patch("src.main.build_registry", return_value=fake_registry),
             patch("src.main.SchedulerRunner"),
+            patch("src.main.ThreadPoolExecutor"),
             patch("src.main.time.sleep", side_effect=fast_exit),
             patch("src.main.signal.signal"),
         ):
@@ -202,6 +217,7 @@ class TestMain:
             patch("src.main.load_agent_config", return_value=fake_team_config),
             patch("src.main.build_registry", return_value=fake_registry) as mock_build,
             patch("src.main.SchedulerRunner"),
+            patch("src.main.ThreadPoolExecutor"),
             patch("src.main.time.sleep", side_effect=fast_exit),
             patch("src.main.signal.signal"),
         ):
@@ -222,9 +238,60 @@ class TestMain:
             patch("src.main.load_agent_config", return_value=MagicMock()),
             patch("src.main.build_registry", return_value=fake_registry),
             patch("src.main.SchedulerRunner"),
+            patch("src.main.ThreadPoolExecutor"),
             patch("src.main.time.sleep", side_effect=fast_exit),
             patch("src.main.signal.signal"),
         ):
             main_module.main()
 
         assert main_module._registry is fake_registry
+
+    # ------------------------------------------------------------------
+    # ThreadPoolExecutor
+    # ------------------------------------------------------------------
+
+    def test_main_creates_thread_pool_executor(self) -> None:
+        """main() must create a ThreadPoolExecutor with MAX_CONCURRENT_DEV_AGENTS workers."""
+        fake_settings = self._make_fake_settings(max_concurrent=5)
+        fake_registry = self._make_fake_registry()
+
+        def fast_exit(seconds: float) -> None:
+            main_module._shutdown_requested = True
+
+        with (
+            patch("src.main.get_settings", return_value=fake_settings),
+            patch("src.main.load_agent_config", return_value=MagicMock()),
+            patch("src.main.build_registry", return_value=fake_registry),
+            patch("src.main.SchedulerRunner"),
+            patch("src.main.ThreadPoolExecutor") as MockExecutor,
+            patch("src.main.time.sleep", side_effect=fast_exit),
+            patch("src.main.signal.signal"),
+        ):
+            main_module.main()
+
+        MockExecutor.assert_called_once_with(
+            max_workers=5,
+            thread_name_prefix="ai-worker",
+        )
+
+    def test_main_executor_shutdown_on_teardown(self) -> None:
+        """main() must call executor.shutdown(wait=True) during graceful teardown."""
+        fake_settings = self._make_fake_settings()
+        fake_registry = self._make_fake_registry()
+        mock_executor = MagicMock()
+
+        def fast_exit(seconds: float) -> None:
+            main_module._shutdown_requested = True
+
+        with (
+            patch("src.main.get_settings", return_value=fake_settings),
+            patch("src.main.load_agent_config", return_value=MagicMock()),
+            patch("src.main.build_registry", return_value=fake_registry),
+            patch("src.main.SchedulerRunner"),
+            patch("src.main.ThreadPoolExecutor", return_value=mock_executor),
+            patch("src.main.time.sleep", side_effect=fast_exit),
+            patch("src.main.signal.signal"),
+        ):
+            main_module.main()
+
+        mock_executor.shutdown.assert_called_once_with(wait=True)

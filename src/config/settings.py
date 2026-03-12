@@ -21,13 +21,13 @@ LLM / AI Providers
     ``DEFAULT_LLM_PROVIDER``  — selects the default provider (``"openai"`` or
                                 ``"anthropic"``).
 
-Slack Bolt
-    These three fields are used *directly* by the Slack Bolt Socket Mode
-    server (``src.slack_app``).  They are **separate** from any Slack
-    credentials managed by CrewAI AMP.
+Slack Bolt — Events API HTTP server
+    These fields are used *directly* by the Slack Bolt Events API HTTP server
+    (``src.slack_app``).  They are **separate** from any Slack credentials
+    managed by CrewAI AMP.
     ``SLACK_BOT_TOKEN``      — ``xoxb-…``  bot user OAuth token.
-    ``SLACK_APP_TOKEN``      — ``xapp-…``  app-level token (Socket Mode).
     ``SLACK_SIGNING_SECRET`` — verifies incoming event-payload signatures.
+    ``SLACK_PORT``           — TCP port for ``AsyncApp.start()`` (default ``3000``).
 
 Scheduler
     ``SCHEDULER_INTERVAL_SECONDS`` — default polling interval for all jobs.
@@ -89,13 +89,15 @@ class AppSettings(BaseSettings):
         DEFAULT_LLM_PROVIDER: Selects which LLM provider is used as the
             default for all agents.  One of ``"openai"`` or ``"anthropic"``.
         SLACK_BOT_TOKEN: Slack bot user OAuth token (``xoxb-…``).  Used
-            directly by the Slack Bolt Socket Mode server to authenticate the
-            WebSocket connection.  Required from Phase 6 onward.
-        SLACK_APP_TOKEN: Slack app-level token (``xapp-…``).  Enables Socket
-            Mode on the Bolt app.  Required from Phase 6 onward.
+            directly by the Slack Bolt Events API HTTP server to authenticate
+            requests.  Required from Phase 6 onward (``simple-ai-slack``
+            process only).
         SLACK_SIGNING_SECRET: Slack signing secret.  Used by Bolt to verify
             the authenticity of incoming event payloads.  Required from
-            Phase 6 onward.
+            Phase 6 onward (``simple-ai-slack`` process only).
+        SLACK_PORT: TCP port for the Slack Bolt built-in HTTP server
+            (Events API endpoint).  ``AsyncApp.start()`` listens on this port
+            at ``POST /slack/events``.  Defaults to ``3000``.
         SCHEDULER_INTERVAL_SECONDS: Default polling interval (seconds) applied
             to all interval-based APScheduler jobs.  Defaults to ``60``.
         SCHEDULER_TIMEZONE: Timezone string understood by APScheduler / pytz
@@ -153,29 +155,30 @@ class AppSettings(BaseSettings):
     """
 
     # ------------------------------------------------------------------
-    # Slack Bolt — direct credentials for the Socket Mode server
+    # Slack Bolt — direct credentials for the Events API HTTP server
     # (separate from CrewAI AMP OAuth)
     # ------------------------------------------------------------------
 
     SLACK_BOT_TOKEN: Optional[SecretStr] = None
     """Slack bot user OAuth token (``xoxb-…``).
 
-    Used directly by the Slack Bolt Socket Mode server.
-    Required from Phase 6 onward.
-    """
-
-    SLACK_APP_TOKEN: Optional[SecretStr] = None
-    """Slack app-level token (``xapp-…``).
-
-    Enables Socket Mode on the Bolt application.
-    Required from Phase 6 onward.
+    Used directly by the Slack Bolt Events API HTTP server.
+    Required from Phase 6 onward (``simple-ai-slack`` process only).
     """
 
     SLACK_SIGNING_SECRET: Optional[SecretStr] = None
     """Slack signing secret.
 
     Used by Bolt to verify the authenticity of incoming event payloads.
-    Required from Phase 6 onward.
+    Required from Phase 6 onward (``simple-ai-slack`` process only).
+    """
+
+    SLACK_PORT: int = 3000
+    """TCP port for the Slack Bolt built-in HTTP server (Events API endpoint).
+
+    ``AsyncApp.start()`` listens on this port at ``POST /slack/events``.
+    Binds to ``0.0.0.0`` internally — only the port is configurable.
+    Defaults to ``3000``.
     """
 
     # ------------------------------------------------------------------
