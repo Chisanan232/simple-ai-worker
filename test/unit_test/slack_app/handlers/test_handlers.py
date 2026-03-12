@@ -8,10 +8,9 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
-import pytest
 
-from src.slack_app.handlers.planner import planner_handler
 from src.slack_app.handlers.dev_lead import dev_lead_handler
+from src.slack_app.handlers.planner import planner_handler
 
 
 def _make_event(ts: str = "111.000", thread_ts: str | None = None) -> dict:
@@ -94,8 +93,9 @@ class TestPlannerHandler:
 
         executor.submit.assert_not_called()
         say.assert_called_once()
-        assert "planner" in say.call_args.kwargs.get("text", "").lower() or \
-               "[planner]" in say.call_args.kwargs.get("text", "")
+        assert "planner" in say.call_args.kwargs.get("text", "").lower() or "[planner]" in say.call_args.kwargs.get(
+            "text", ""
+        )
 
     def test_strips_planner_tag_before_passing_to_crew(self) -> None:
         """The [planner] tag must be stripped from the message body sent to the crew."""
@@ -419,5 +419,3 @@ class TestRunDevLeadCrew:
             )
 
         say.assert_not_called()
-
-

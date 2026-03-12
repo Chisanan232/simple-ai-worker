@@ -15,16 +15,15 @@ from __future__ import annotations
 from typing import Optional
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from src.agents.llm_factory import LLMFactory
 from src.config.agent_config import LLMConfig, LLMOptions
 from src.config.settings import AppSettings
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_settings(
     openai_key: Optional[str] = None,
@@ -63,6 +62,7 @@ def _make_llm_config(
 # _model_string (private, pure helper — no mock needed)
 # ===========================================================================
 
+
 class TestModelString:
     def test_openai_format(self) -> None:
         assert LLMFactory._model_string("openai", "gpt-4o") == "openai/gpt-4o"
@@ -83,6 +83,7 @@ class TestModelString:
 # ===========================================================================
 # _resolve_api_key (private, pure helper — no mock needed)
 # ===========================================================================
+
 
 class TestResolveApiKey:
     def test_openai_key_returned_when_set(self) -> None:

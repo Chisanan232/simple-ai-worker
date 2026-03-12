@@ -30,9 +30,8 @@ import signal
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional
-
 from types import FrameType
+from typing import Optional
 
 from src.agents.registry import AgentRegistry, build_registry
 from src.config import get_settings, load_agent_config

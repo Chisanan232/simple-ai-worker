@@ -184,4 +184,3 @@ def planner_handler(
         say,
         registry,
     )
-

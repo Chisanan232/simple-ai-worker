@@ -9,10 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-import src.scheduler.jobs.planner_listener as planner_module
 import src.scheduler.jobs.dev_lead_listener as dev_lead_module
-from src.scheduler.jobs.planner_listener import planner_listener_job
+import src.scheduler.jobs.planner_listener as planner_module
 from src.scheduler.jobs.dev_lead_listener import dev_lead_listener_job
+from src.scheduler.jobs.planner_listener import planner_listener_job
 
 
 def _make_registry(agent_id: str = "planner", raise_key_error: bool = False) -> MagicMock:
@@ -39,9 +39,7 @@ class TestPlannerListenerJob:
     def teardown_method(self) -> None:
         planner_module._last_processed_ts = None
 
-    def test_returns_early_when_planner_not_in_registry(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_returns_early_when_planner_not_in_registry(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log an error and return early when 'planner' is not in registry."""
         import logging
 
@@ -142,9 +140,7 @@ class TestDevLeadListenerJob:
     def teardown_method(self) -> None:
         dev_lead_module._last_processed_ts = None
 
-    def test_returns_early_when_dev_lead_not_in_registry(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_returns_early_when_dev_lead_not_in_registry(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log an error and return early when 'dev_lead' is not in registry."""
         import logging
 
@@ -211,6 +207,3 @@ class TestDevLeadListenerJob:
 
         call_kwargs = MockBuilder.build.call_args.kwargs
         assert mock_agent in call_kwargs["agents"]
-
-
-

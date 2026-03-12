@@ -200,4 +200,3 @@ def dev_lead_handler(
         say,
         registry,
     )
-

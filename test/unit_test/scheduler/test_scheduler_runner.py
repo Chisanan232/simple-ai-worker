@@ -195,7 +195,6 @@ class TestSchedulerRunnerRepr:
         assert "Asia/Tokyo" in repr(runner)
 
 
-
 class TestSchedulerRunnerInit:
     """Tests for SchedulerRunner.__init__."""
 

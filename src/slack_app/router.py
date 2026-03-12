@@ -112,4 +112,3 @@ def role_router(
             thread_ts,
         )
         say(text=_USAGE_HINT, thread_ts=thread_ts)
-

@@ -44,9 +44,7 @@ class TestScanAndDispatchJob:
     def teardown_method(self) -> None:
         scan_module._in_progress_tickets.clear()
 
-    def test_skips_run_when_dev_agent_missing_from_registry(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_skips_run_when_dev_agent_missing_from_registry(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log an error and return early when 'dev_agent' is not in registry."""
         import logging
 
@@ -142,9 +140,7 @@ class TestScanAndDispatchJob:
 
         assert "PROJ-42" in scan_module._in_progress_tickets
 
-    def test_handles_non_json_scanner_output_gracefully(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_handles_non_json_scanner_output_gracefully(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log a warning and return early if scanner output is not valid JSON."""
         import logging
 
@@ -166,9 +162,7 @@ class TestScanAndDispatchJob:
         executor.submit.assert_not_called()
         assert any("JSON" in r.message for r in caplog.records)
 
-    def test_handles_scanner_crew_exception(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_handles_scanner_crew_exception(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log the exception and return early if scanner crew.kickoff() raises."""
         import logging
 
@@ -211,9 +205,7 @@ class TestScanAndDispatchJob:
 
         executor.submit.assert_called_once()
 
-    def test_skips_ticket_entry_with_missing_id(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_skips_ticket_entry_with_missing_id(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must warn and skip ticket entries that have no 'id' field."""
         import logging
 
@@ -234,5 +226,3 @@ class TestScanAndDispatchJob:
             scan_and_dispatch_job(registry=registry, settings=settings, executor=executor)
 
         executor.submit.assert_not_called()
-
-

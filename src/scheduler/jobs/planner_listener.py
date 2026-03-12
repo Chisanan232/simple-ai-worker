@@ -117,8 +117,7 @@ def planner_listener_job(
         planner_agent = registry["planner"]
     except KeyError:
         logger.error(
-            "planner_listener_job: 'planner' agent not found in registry — "
-            "available ids: %s. Skipping run.",
+            "planner_listener_job: 'planner' agent not found in registry — " "available ids: %s. Skipping run.",
             registry.agent_ids(),
         )
         return
@@ -151,4 +150,3 @@ def planner_listener_job(
 
     except Exception:  # noqa: BLE001
         logger.exception("planner_listener_job: crew raised an exception.")
-

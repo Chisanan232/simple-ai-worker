@@ -15,4 +15,3 @@ from .dev_lead import dev_lead_handler
 from .planner import planner_handler
 
 __all__: List[str] = ["planner_handler", "dev_lead_handler"]
-

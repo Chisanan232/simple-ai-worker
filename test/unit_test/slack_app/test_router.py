@@ -5,9 +5,8 @@ Unit tests for :func:`src.slack_app.router.role_router`.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from src.slack_app.router import role_router
 
@@ -176,4 +175,3 @@ class TestRoleRouter:
             role_router(event=event, say=say, registry=registry, executor=executor)
 
         say.assert_called_once()
-

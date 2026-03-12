@@ -59,9 +59,7 @@ class TestCreateBoltApp:
         executor = MagicMock(spec=ThreadPoolExecutor)
 
         with patch("src.slack_app.app.AsyncApp") as MockAsyncApp:
-            result = create_bolt_app(
-                settings=settings, registry=registry, executor=executor
-            )
+            result = create_bolt_app(settings=settings, registry=registry, executor=executor)
 
         assert result is MockAsyncApp.return_value
 
