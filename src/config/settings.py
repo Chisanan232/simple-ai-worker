@@ -245,4 +245,3 @@ def get_settings() -> AppSettings:
         assert get_settings().SCHEDULER_INTERVAL_SECONDS == 30
     """
     return AppSettings()
-

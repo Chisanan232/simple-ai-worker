@@ -205,9 +205,7 @@ class TestGetSettings:
         second = get_settings()
         assert first is second
 
-    def test_get_settings_cache_clear_returns_fresh_instance(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_get_settings_cache_clear_returns_fresh_instance(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """After cache_clear(), get_settings() must return a new instance."""
         first = get_settings()
         get_settings.cache_clear()
@@ -223,5 +221,3 @@ class TestGetSettings:
         monkeypatch.setenv("SCHEDULER_TIMEZONE", "America/New_York")
         settings = get_settings()
         assert settings.SCHEDULER_TIMEZONE == "America/New_York"
-
-

@@ -37,4 +37,3 @@ __all__: List[str] = [
     "AppSettings",
     "get_settings",
 ]
-
