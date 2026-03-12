@@ -55,7 +55,6 @@ class TestAppSettingsDefaults:
         assert settings.OPENAI_API_KEY is None
         assert settings.ANTHROPIC_API_KEY is None
         assert settings.SLACK_BOT_TOKEN is None
-        assert settings.SLACK_APP_TOKEN is None
         assert settings.SLACK_SIGNING_SECRET is None
 
 
@@ -90,12 +89,11 @@ class TestAppSettingsFromEnv:
         assert settings.SLACK_BOT_TOKEN is not None
         assert settings.SLACK_BOT_TOKEN.get_secret_value() == "xoxb-test-bot-token"
 
-    def test_slack_app_token_loaded_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """SLACK_APP_TOKEN must be loaded as a SecretStr from the environment."""
-        monkeypatch.setenv("SLACK_APP_TOKEN", "xapp-test-app-token")
+    def test_slack_port_loaded_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SLACK_PORT must be coerced to int from the environment."""
+        monkeypatch.setenv("SLACK_PORT", "4000")
         settings = AppSettings()
-        assert settings.SLACK_APP_TOKEN is not None
-        assert settings.SLACK_APP_TOKEN.get_secret_value() == "xapp-test-app-token"
+        assert settings.SLACK_PORT == 4000
 
     def test_slack_signing_secret_loaded_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """SLACK_SIGNING_SECRET must be loaded as a SecretStr from the environment."""
