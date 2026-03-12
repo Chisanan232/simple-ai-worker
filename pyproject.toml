@@ -37,9 +37,6 @@ dependencies = [
     "pydantic-settings>=2.10.1",
     # YAML parsing for agent config files
     "pyyaml>=6.0.2",
-    # Web framework for API (Slack events APIs) as a AI chat application
-    "fastapi>=0.135.1",
-    "uvicorn[standard]>=0.41.0",
 ]
 
 [project.scripts]
