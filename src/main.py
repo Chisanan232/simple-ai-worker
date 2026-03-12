@@ -1,7 +1,7 @@
 """
-Application entry-point for simple-ai-worker.
+Application entry-point for simple-ai-worker (scheduler process).
 
-Startup sequence (Phase 6):
+Startup sequence:
     1. Configure root logging.
     2. Load :class:`~src.config.settings.AppSettings` from ``.env`` via
        :func:`~src.config.get_settings`.
@@ -11,14 +11,16 @@ Startup sequence (Phase 6):
     5. Build the :class:`~src.agents.registry.AgentRegistry` via
        :func:`~src.agents.registry.build_registry`.
     6. Create the bounded :class:`~concurrent.futures.ThreadPoolExecutor`
-       shared by the Slack Bolt handlers and the Dev Agent dispatcher.
-    7. Start the Slack Bolt Socket Mode server in a background daemon thread
-       (when Slack credentials are present in settings).
-    8. Instantiate :class:`~src.scheduler.runner.SchedulerRunner` using
+       used by the Dev Agent dispatcher.
+    7. Instantiate :class:`~src.scheduler.runner.SchedulerRunner` using
        values from :class:`~src.config.settings.AppSettings`.
-    9. Start the scheduler.
-    10. Block the main thread until a signal is received.
-    11. Graceful teardown: stop scheduler → shut down executor → close Bolt.
+    8. Start the scheduler.
+    9. Block the main thread until a signal is received.
+    10. Graceful teardown: stop scheduler → shut down executor.
+
+This process runs **no Slack code at all**.  The Slack Events API webhook
+is served by the separate ``simple-ai-slack`` process
+(entry point: ``src/slack_main.py``).
 """
 
 from __future__ import annotations
@@ -28,11 +30,9 @@ import signal
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
-if TYPE_CHECKING:
-    from slack_bolt.adapter.socket_mode import SocketModeHandler
-    from types import FrameType
+from types import FrameType
 
 from src.agents.registry import AgentRegistry, build_registry
 from src.config import get_settings, load_agent_config
@@ -62,7 +62,6 @@ logger = logging.getLogger(__name__)
 _shutdown_requested: bool = False
 _runner: Optional[SchedulerRunner] = None
 _registry: Optional[AgentRegistry] = None
-_socket_handler: Optional["SocketModeHandler"] = None
 _executor: Optional[ThreadPoolExecutor] = None
 
 
@@ -86,7 +85,7 @@ def _handle_signal(signum: int, frame: Optional["FrameType"]) -> None:  # noqa: 
 
 
 def main() -> None:
-    """Start the simple-ai-worker process.
+    """Start the simple-ai-worker scheduler process.
 
     This function is referenced by the ``[project.scripts]`` entry in
     ``pyproject.toml`` so it can be invoked via::
@@ -96,7 +95,7 @@ def main() -> None:
     Returns:
         None
     """
-    global _runner, _registry, _socket_handler, _executor  # noqa: PLW0603
+    global _runner, _registry, _executor  # noqa: PLW0603
 
     logger.info("simple-ai-worker starting …")
 
@@ -104,7 +103,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 
-    # Phase 2: load AppSettings from .env (via pydantic-settings).
+    # Load AppSettings from .env (via pydantic-settings).
     settings = get_settings()
     logger.info(
         "Settings loaded (interval=%ds, timezone=%s, max_dev_agents=%d).",
@@ -113,7 +112,7 @@ def main() -> None:
         settings.MAX_CONCURRENT_DEV_AGENTS,
     )
 
-    # Phase 4: load agent team config and build the registry.
+    # Load agent team config and build the registry.
     agent_team = load_agent_config(settings.AGENT_CONFIG_PATH)
     _registry = build_registry(agent_team, settings)
     logger.info(
@@ -122,8 +121,7 @@ def main() -> None:
         ", ".join(_registry.agent_ids()),
     )
 
-    # Phase 6: create the bounded ThreadPoolExecutor shared by the Slack Bolt
-    # handlers and the scan_and_dispatch_job.
+    # Create the bounded ThreadPoolExecutor used by scan_and_dispatch_job.
     _executor = ThreadPoolExecutor(
         max_workers=settings.MAX_CONCURRENT_DEV_AGENTS,
         thread_name_prefix="ai-worker",
@@ -133,40 +131,7 @@ def main() -> None:
         settings.MAX_CONCURRENT_DEV_AGENTS,
     )
 
-    # Phase 6: start Slack Bolt Socket Mode server in a background daemon thread.
-    slack_enabled: bool = bool(
-        settings.SLACK_BOT_TOKEN
-        and settings.SLACK_APP_TOKEN
-        and settings.SLACK_SIGNING_SECRET
-    )
-
-    if slack_enabled:
-        try:
-            from src.slack_app.app import create_bolt_app
-
-            _bolt_app, _socket_handler = create_bolt_app(
-                settings=settings,
-                registry=_registry,
-                executor=_executor,
-            )
-            # connect() starts the WebSocket in a background daemon thread and
-            # returns immediately — it does not block the main thread.
-            _socket_handler.connect()
-            logger.info("Slack Bolt Socket Mode handler connected (background thread).")
-        except Exception:  # noqa: BLE001
-            logger.exception(
-                "Failed to start Slack Bolt app — continuing without Slack. "
-                "Check SLACK_BOT_TOKEN / SLACK_APP_TOKEN / SLACK_SIGNING_SECRET."
-            )
-            _socket_handler = None
-    else:
-        logger.warning(
-            "Slack credentials not fully configured — Slack Bolt app will NOT start. "
-            "Set SLACK_BOT_TOKEN, SLACK_APP_TOKEN, and SLACK_SIGNING_SECRET in .env "
-            "to enable real-time Slack chat."
-        )
-
-    # Phase 6 (also 1): start APScheduler with all registered jobs.
+    # Start APScheduler with all registered jobs.
     _runner = SchedulerRunner(
         interval_seconds=settings.SCHEDULER_INTERVAL_SECONDS,
         timezone=settings.SCHEDULER_TIMEZONE,
@@ -179,8 +144,6 @@ def main() -> None:
     logger.info("simple-ai-worker is running. Press Ctrl-C to stop.")
 
     # Block the main thread in a tight loop so signal handlers can fire.
-    # ``time.sleep(1)`` keeps CPU usage negligible while remaining
-    # responsive to signals within ~1 second.
     while not _shutdown_requested:
         time.sleep(1)
 
@@ -191,13 +154,6 @@ def main() -> None:
 
     _runner.stop(wait=True)
     logger.info("Scheduler stopped.")
-
-    if _socket_handler is not None:
-        try:
-            _socket_handler.close()
-            logger.info("Slack Bolt Socket Mode handler closed.")
-        except Exception:  # noqa: BLE001
-            logger.exception("Error while closing Slack Bolt handler (ignored).")
 
     if _executor is not None:
         _executor.shutdown(wait=True)
