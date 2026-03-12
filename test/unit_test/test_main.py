@@ -39,7 +39,6 @@ class TestMain:
         main_module._shutdown_requested = False
         main_module._runner = None
         main_module._registry = None
-        main_module._socket_handler = None
         main_module._executor = None
 
     def teardown_method(self) -> None:
@@ -47,7 +46,6 @@ class TestMain:
         main_module._shutdown_requested = False
         main_module._runner = None
         main_module._registry = None
-        main_module._socket_handler = None
         main_module._executor = None
 
     # ------------------------------------------------------------------
@@ -61,20 +59,12 @@ class TestMain:
         max_concurrent: int = 3,
         agent_config_path: str = "config/agents.yaml",
     ) -> MagicMock:
-        """Return a mock AppSettings object with sensible defaults.
-
-        Slack credentials are all ``None`` by default so the Bolt app is
-        **not** started in unit tests (no real WebSocket connections).
-        """
+        """Return a mock AppSettings object with sensible defaults."""
         mock_settings = MagicMock()
         mock_settings.SCHEDULER_INTERVAL_SECONDS = interval_seconds
         mock_settings.SCHEDULER_TIMEZONE = timezone
         mock_settings.MAX_CONCURRENT_DEV_AGENTS = max_concurrent
         mock_settings.AGENT_CONFIG_PATH = agent_config_path
-        # Slack disabled by default in unit tests
-        mock_settings.SLACK_BOT_TOKEN = None
-        mock_settings.SLACK_APP_TOKEN = None
-        mock_settings.SLACK_SIGNING_SECRET = None
         return mock_settings
 
     def _make_fake_registry(self, agent_ids: list = None) -> MagicMock:  # type: ignore[assignment]
@@ -257,7 +247,7 @@ class TestMain:
         assert main_module._registry is fake_registry
 
     # ------------------------------------------------------------------
-    # Phase 6 — Slack Bolt and ThreadPoolExecutor
+    # ThreadPoolExecutor
     # ------------------------------------------------------------------
 
     def test_main_creates_thread_pool_executor(self) -> None:
@@ -284,78 +274,6 @@ class TestMain:
             thread_name_prefix="ai-worker",
         )
 
-    def test_main_skips_slack_when_credentials_missing(self) -> None:
-        """main() must NOT start Slack Bolt when any credential is None."""
-        fake_settings = self._make_fake_settings()  # Slack tokens all None
-        fake_registry = self._make_fake_registry()
-
-        def fast_exit(seconds: float) -> None:
-            main_module._shutdown_requested = True
-
-        with (
-            patch("src.main.get_settings", return_value=fake_settings),
-            patch("src.main.load_agent_config", return_value=MagicMock()),
-            patch("src.main.build_registry", return_value=fake_registry),
-            patch("src.main.SchedulerRunner"),
-            patch("src.main.ThreadPoolExecutor"),
-            patch("src.main.time.sleep", side_effect=fast_exit),
-            patch("src.main.signal.signal"),
-            patch("src.main.create_bolt_app", create=True) as mock_bolt,
-        ):
-            main_module.main()
-
-        # create_bolt_app should NOT be called when credentials are missing.
-        mock_bolt.assert_not_called()
-        assert main_module._socket_handler is None
-
-    def test_main_starts_slack_bolt_when_credentials_present(self) -> None:
-        """main() must start Slack Bolt Socket Mode when all credentials are set."""
-        from unittest.mock import MagicMock as MM
-
-        fake_settings = self._make_fake_settings()
-        fake_settings.SLACK_BOT_TOKEN = MM()
-        fake_settings.SLACK_APP_TOKEN = MM()
-        fake_settings.SLACK_SIGNING_SECRET = MM()
-        fake_registry = self._make_fake_registry()
-
-        mock_socket_handler = MM()
-        mock_bolt_app = MM()
-
-        def fast_exit(seconds: float) -> None:
-            main_module._shutdown_requested = True
-
-        with (
-            patch("src.main.get_settings", return_value=fake_settings),
-            patch("src.main.load_agent_config", return_value=MagicMock()),
-            patch("src.main.build_registry", return_value=fake_registry),
-            patch("src.main.SchedulerRunner"),
-            patch("src.main.ThreadPoolExecutor"),
-            patch("src.main.time.sleep", side_effect=fast_exit),
-            patch("src.main.signal.signal"),
-            patch(
-                "src.slack_app.app.create_bolt_app",
-                return_value=(mock_bolt_app, mock_socket_handler),
-            ),
-        ):
-            # Patch at import site used by main.py (lazy import inside branch)
-            with patch(
-                "src.main.create_bolt_app",  # noqa: SIM117
-                return_value=(mock_bolt_app, mock_socket_handler),
-                create=True,
-            ):
-                pass  # The patching is done in the block below
-
-            # Patch inside the function's local import
-            import importlib
-            import src.slack_app.app as bolt_module
-            original = bolt_module.create_bolt_app
-            bolt_module.create_bolt_app = lambda **kw: (mock_bolt_app, mock_socket_handler)
-            try:
-                main_module.main()
-                mock_socket_handler.connect.assert_called_once()
-            finally:
-                bolt_module.create_bolt_app = original
-
     def test_main_executor_shutdown_on_teardown(self) -> None:
         """main() must call executor.shutdown(wait=True) during graceful teardown."""
         fake_settings = self._make_fake_settings()
@@ -377,4 +295,3 @@ class TestMain:
             main_module.main()
 
         mock_executor.shutdown.assert_called_once_with(wait=True)
-
