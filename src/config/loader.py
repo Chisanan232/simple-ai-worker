@@ -160,12 +160,17 @@ def _resolve_string_placeholders(value: str, settings: Optional["AppSettings"]) 
     return _ENV_PLACEHOLDER_RE.sub(_replace, value)
 
 
-def _apply_header_placeholders(raw_data: Dict[str, Any], settings: Optional["AppSettings"]) -> None:
-    """Resolve ``${VAR}`` placeholders inside ``mcp_servers[*].headers`` in-place.
+def _apply_mcp_placeholders(raw_data: Dict[str, Any], settings: Optional["AppSettings"]) -> None:
+    """Resolve ``${VAR}`` placeholders inside ``mcp_servers[*]`` in-place.
 
-    Walks the ``mcp_servers`` section of the raw parsed YAML dict and replaces
-    placeholder tokens in every header *value* string.  Keys are left
-    unchanged.  Operates in-place — no return value.
+    Resolves placeholder tokens in:
+    - ``url``     — allows ``${MCP_JIRA_URL}`` etc. so the same
+                    ``agents.yaml`` works both outside Docker (127.0.0.1)
+                    and inside Docker Compose (service DNS names) purely by
+                    changing environment variables.
+    - ``headers`` — allows ``${MCP_JIRA_TOKEN}`` etc. for auth headers.
+
+    Operates in-place — no return value.
 
     Args:
         raw_data: The top-level dict produced by ``yaml.safe_load``.
@@ -178,6 +183,14 @@ def _apply_header_placeholders(raw_data: Dict[str, Any], settings: Optional["App
     for server_id, server_cfg in mcp_servers.items():
         if not isinstance(server_cfg, dict):
             continue
+
+        # Resolve ${...} in the url field
+        url_val = server_cfg.get("url")
+        if isinstance(url_val, str):
+            server_cfg["url"] = _resolve_string_placeholders(url_val, settings)
+            logger.debug("Resolved url placeholder for MCP server '%s'.", server_id)
+
+        # Resolve ${...} in headers values
         headers = server_cfg.get("headers")
         if not isinstance(headers, dict):
             continue
@@ -262,9 +275,9 @@ def load_agent_config(
         )
 
     # ------------------------------------------------------------------ #
-    # 2b. Resolve ${VAR} placeholders in mcp_servers headers
+    # 2b. Resolve ${VAR} placeholders in mcp_servers (url + headers)
     # ------------------------------------------------------------------ #
-    _apply_header_placeholders(raw_data, settings)
+    _apply_mcp_placeholders(raw_data, settings)
 
     # ------------------------------------------------------------------ #
     # 3. Validate against Pydantic schema
