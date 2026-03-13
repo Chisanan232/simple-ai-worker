@@ -286,9 +286,7 @@ class TestMCPServerDefinition:
         assert defn.tool_filter == ["create_issue", "search_issues"]
 
     def test_http_with_cache_tools_list(self) -> None:
-        defn = MCPServerDefinition(
-            type="http", url="http://127.0.0.1:8100/mcp", cache_tools_list=True
-        )
+        defn = MCPServerDefinition(type="http", url="http://127.0.0.1:8100/mcp", cache_tools_list=True)
         assert defn.cache_tools_list is True
 
     def test_http_missing_url_raises(self) -> None:
@@ -388,17 +386,19 @@ class TestAgentConfigMcps:
 
     def test_mcps_parsed_from_dict(self) -> None:
         """Override mapping syntax parses correctly from a raw dict (YAML form)."""
-        cfg = AgentConfig.model_validate({
-            "id": "planner",
-            "role": "Planner",
-            "goal": "Plan.",
-            "backstory": "You plan.",
-            "llm": {"provider": "openai", "model": "gpt-4o"},
-            "mcps": [
-                "slack",
-                {"server": "jira", "tool_filter": ["create_issue"]},
-            ],
-        })
+        cfg = AgentConfig.model_validate(
+            {
+                "id": "planner",
+                "role": "Planner",
+                "goal": "Plan.",
+                "backstory": "You plan.",
+                "llm": {"provider": "openai", "model": "gpt-4o"},
+                "mcps": [
+                    "slack",
+                    {"server": "jira", "tool_filter": ["create_issue"]},
+                ],
+            }
+        )
         assert len(cfg.mcps) == 2
         assert cfg.mcps[0] == "slack"
         assert isinstance(cfg.mcps[1], MCPServerRef)
@@ -433,75 +433,92 @@ class TestAgentTeamConfigMcpServers:
         assert config.mcp_servers == {}
 
     def test_single_http_server_registered(self) -> None:
-        config = AgentTeamConfig.model_validate(self._make_team_data(
-            mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
-        ))
+        config = AgentTeamConfig.model_validate(
+            self._make_team_data(
+                mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
+            )
+        )
         assert "jira" in config.mcp_servers
         assert isinstance(config.mcp_servers["jira"], MCPServerDefinition)
 
     def test_multiple_servers_registered(self) -> None:
-        config = AgentTeamConfig.model_validate(self._make_team_data(
-            mcp_servers={
-                "jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"},
-                "slack": {"type": "http", "url": "http://127.0.0.1:8103/mcp"},
-            },
-        ))
+        config = AgentTeamConfig.model_validate(
+            self._make_team_data(
+                mcp_servers={
+                    "jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"},
+                    "slack": {"type": "http", "url": "http://127.0.0.1:8103/mcp"},
+                },
+            )
+        )
         assert len(config.mcp_servers) == 2
 
     def test_agent_plain_ref_resolves_to_known_server(self) -> None:
-        config = AgentTeamConfig.model_validate(self._make_team_data(
-            mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
-            agent_mcps=["jira"],
-        ))
+        config = AgentTeamConfig.model_validate(
+            self._make_team_data(
+                mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
+                agent_mcps=["jira"],
+            )
+        )
         assert config.agents[0].mcps == ["jira"]
 
     def test_agent_unknown_ref_raises_validation_error(self) -> None:
         """Referencing an MCP server ID that isn't in mcp_servers raises at load time."""
         with pytest.raises(ValidationError, match="unknown MCP server"):
-            AgentTeamConfig.model_validate(self._make_team_data(
-                mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
-                agent_mcps=["jirs"],  # typo
-            ))
+            AgentTeamConfig.model_validate(
+                self._make_team_data(
+                    mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
+                    agent_mcps=["jirs"],  # typo
+                )
+            )
 
     def test_agent_unknown_ref_error_names_the_bad_id(self) -> None:
         with pytest.raises(ValidationError) as exc_info:
-            AgentTeamConfig.model_validate(self._make_team_data(
-                mcp_servers={},
-                agent_mcps=["nonexistent"],
-            ))
+            AgentTeamConfig.model_validate(
+                self._make_team_data(
+                    mcp_servers={},
+                    agent_mcps=["nonexistent"],
+                )
+            )
         assert "nonexistent" in str(exc_info.value)
 
     def test_agent_override_ref_resolves(self) -> None:
-        config = AgentTeamConfig.model_validate(self._make_team_data(
-            mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
-            agent_mcps=[{"server": "jira", "tool_filter": ["create_issue"]}],
-        ))
+        config = AgentTeamConfig.model_validate(
+            self._make_team_data(
+                mcp_servers={"jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"}},
+                agent_mcps=[{"server": "jira", "tool_filter": ["create_issue"]}],
+            )
+        )
         assert isinstance(config.agents[0].mcps[0], MCPServerRef)
 
     def test_agent_override_ref_unknown_server_raises(self) -> None:
         with pytest.raises(ValidationError, match="unknown MCP server"):
-            AgentTeamConfig.model_validate(self._make_team_data(
-                mcp_servers={},
-                agent_mcps=[{"server": "clickup", "tool_filter": ["create_task"]}],
-            ))
+            AgentTeamConfig.model_validate(
+                self._make_team_data(
+                    mcp_servers={},
+                    agent_mcps=[{"server": "clickup", "tool_filter": ["create_task"]}],
+                )
+            )
 
     def test_mcp_servers_default_to_empty_dict(self) -> None:
         """mcp_servers field is optional; defaults to {}."""
-        config = AgentTeamConfig.model_validate({
-            "agents": [_minimal_agent("planner")],
-        })
+        config = AgentTeamConfig.model_validate(
+            {
+                "agents": [_minimal_agent("planner")],
+            }
+        )
         assert config.mcp_servers == {}
 
     def test_multiple_agents_multiple_refs_all_validated(self) -> None:
         """Cross-ref validator checks all agents, not just the first."""
         with pytest.raises(ValidationError, match="unknown MCP server"):
-            AgentTeamConfig.model_validate({
-                "mcp_servers": {
-                    "jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"},
-                },
-                "agents": [
-                    {**_minimal_agent("planner"), "mcps": ["jira"]},
-                    {**_minimal_agent("dev_agent"), "mcps": ["github"]},  # github not registered
-                ],
-            })
-
+            AgentTeamConfig.model_validate(
+                {
+                    "mcp_servers": {
+                        "jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"},
+                    },
+                    "agents": [
+                        {**_minimal_agent("planner"), "mcps": ["jira"]},
+                        {**_minimal_agent("dev_agent"), "mcps": ["github"]},  # github not registered
+                    ],
+                }
+            )

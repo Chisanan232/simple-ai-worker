@@ -123,6 +123,7 @@ def _resolve_placeholder(var_name: str, settings: Optional["AppSettings"]) -> Op
         field_val = getattr(settings, var_name, None)
         if field_val is not None:
             from pydantic import SecretStr  # local import — avoid circular dep
+
             return field_val.get_secret_value() if isinstance(field_val, SecretStr) else str(field_val)
     # Fall back to the process environment.
     return os.environ.get(var_name)
@@ -143,6 +144,7 @@ def _resolve_string_placeholders(value: str, settings: Optional["AppSettings"]) 
     Returns:
         The string with all resolvable placeholders substituted.
     """
+
     def _replace(match: re.Match[str]) -> str:
         resolved = _resolve_placeholder(match.group(1), settings)
         if resolved is None:
@@ -186,9 +188,7 @@ def _apply_header_placeholders(raw_data: Dict[str, Any], settings: Optional["App
             else:
                 resolved_headers[header_key] = header_val
         server_cfg["headers"] = resolved_headers
-        logger.debug(
-            "Resolved header placeholders for MCP server '%s'.", server_id
-        )
+        logger.debug("Resolved header placeholders for MCP server '%s'.", server_id)
 
 
 def load_agent_config(

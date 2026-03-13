@@ -643,4 +643,3 @@ class TestAgentFactoryBuildMcp:
         assert isinstance(kwargs["mcps"][0], MCPServerHTTP)
         # Overridden filter applied — filter object is set
         assert kwargs["mcps"][0].tool_filter is not None
-

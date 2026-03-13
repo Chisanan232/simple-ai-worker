@@ -460,9 +460,7 @@ class TestLoadAgentConfigMcp:
         assert headers is not None
         assert headers["Authorization"] == "Bearer resolved-tok"
 
-    def test_header_placeholder_resolved_from_env(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_header_placeholder_resolved_from_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """${MCP_JIRA_TOKEN} falls back to os.environ when not in AppSettings."""
         monkeypatch.setenv("MCP_JIRA_TOKEN", "env-tok")
         path = _write(tmp_path, _MCP_YAML_WITH_PLACEHOLDER)
@@ -486,4 +484,3 @@ class TestLoadAgentConfigMcp:
         # jira header in this fixture is 'Bearer tok-jira' (no placeholder)
         config = load_agent_config(path)
         assert config.mcp_servers["jira"].headers["Authorization"] == "Bearer tok-jira"
-

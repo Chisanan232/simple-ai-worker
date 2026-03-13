@@ -182,14 +182,10 @@ class MCPServerDefinition(BaseModel):
         """Ensure transport-specific required fields are present."""
         if self.type in ("http", "sse"):
             if not self.url:
-                raise ValueError(
-                    f"MCPServerDefinition with type='{self.type}' requires a non-empty 'url'."
-                )
+                raise ValueError(f"MCPServerDefinition with type='{self.type}' requires a non-empty 'url'.")
         if self.type == "stdio":
             if not self.command:
-                raise ValueError(
-                    "MCPServerDefinition with type='stdio' requires a non-empty 'command'."
-                )
+                raise ValueError("MCPServerDefinition with type='stdio' requires a non-empty 'command'.")
         return self
 
 
@@ -333,6 +329,3 @@ class AgentTeamConfig(BaseModel):
                         f"Available servers: {sorted(known) if known else '(none defined)'}."
                     )
         return self
-
-
-

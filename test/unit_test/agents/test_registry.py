@@ -7,7 +7,7 @@ crewai.Agent and crewai.LLM are patched wherever needed.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -49,10 +49,7 @@ def _make_team(*agent_ids: str) -> AgentTeamConfig:
 
 def _make_team_with_mcps(mcp_servers: dict, agent_mcps: dict[str, list]) -> AgentTeamConfig:
     """Build an AgentTeamConfig with mcp_servers registry and per-agent mcps."""
-    agents = [
-        _make_agent_cfg(aid, mcps=agent_mcps.get(aid, []))
-        for aid in agent_mcps
-    ]
+    agents = [_make_agent_cfg(aid, mcps=agent_mcps.get(aid, [])) for aid in agent_mcps]
     return AgentTeamConfig(
         mcp_servers={k: MCPServerDefinition(**v) for k, v in mcp_servers.items()},
         agents=agents,
@@ -313,4 +310,3 @@ class TestBuildRegistryMcp:
             registry = build_registry(team, settings)
 
         assert "planner" in registry
-

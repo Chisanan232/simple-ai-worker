@@ -302,4 +302,3 @@ class TestMcpSettingsFromEnv:
         monkeypatch.setenv("MCP_JIRA_TOKEN", "super-secret")
         s = AppSettings()
         assert "super-secret" not in repr(s.MCP_JIRA_TOKEN)
-

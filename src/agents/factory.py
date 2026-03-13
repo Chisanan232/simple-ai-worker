@@ -105,8 +105,7 @@ class AgentFactory:
             crewai_mcps = resolved if resolved else None
 
         logger.debug(
-            "Building Agent: id=%s, role=%s, provider=%s, model=%s, "
-            "apps=%s, mcp_servers=%s.",
+            "Building Agent: id=%s, role=%s, provider=%s, model=%s, " "apps=%s, mcp_servers=%s.",
             agent_config.id,
             agent_config.role,
             agent_config.llm.provider,
@@ -154,7 +153,9 @@ class AgentFactory:
             List of ``crewai.mcp`` server config objects ready to be passed
             to ``crewai.Agent(mcps=[...])``.
         """
-        from src.config.agent_config import MCPServerRef  # local import avoids circular dep
+        from src.config.agent_config import (
+            MCPServerRef,  # local import avoids circular dep
+        )
 
         result: List[Union[MCPServerHTTP, MCPServerSSE, MCPServerStdio]] = []
         for ref in refs:
@@ -166,11 +167,7 @@ class AgentFactory:
                 tool_filter_override = ref.tool_filter
 
             defn = registry[server_id]  # already validated at load time
-            effective_filter = (
-                tool_filter_override
-                if tool_filter_override is not None
-                else defn.tool_filter
-            )
+            effective_filter = tool_filter_override if tool_filter_override is not None else defn.tool_filter
             crewai_cfg = cls._definition_to_crewai(defn, effective_filter, settings)
             result.append(crewai_cfg)
             logger.debug(
@@ -201,11 +198,7 @@ class AgentFactory:
             A ``crewai.mcp.MCPServerHTTP``, ``MCPServerSSE``, or
             ``MCPServerStdio`` instance.
         """
-        filter_obj = (
-            create_static_tool_filter(allowed_tool_names=tool_filter)
-            if tool_filter
-            else None
-        )
+        filter_obj = create_static_tool_filter(allowed_tool_names=tool_filter) if tool_filter else None
         headers = cls._resolve_headers(defn.headers, settings) if defn.headers else None
 
         if defn.type == "http":
@@ -257,13 +250,10 @@ class AgentFactory:
         def _sub(match: re.Match[str]) -> str:
             var_name = match.group(1)
             from pydantic import SecretStr
+
             field_val = getattr(settings, var_name, None)
             if field_val is not None:
-                return (
-                    field_val.get_secret_value()
-                    if isinstance(field_val, SecretStr)
-                    else str(field_val)
-                )
+                return field_val.get_secret_value() if isinstance(field_val, SecretStr) else str(field_val)
             env_val = os.environ.get(var_name)
             if env_val is not None:
                 return env_val
