@@ -29,4 +29,12 @@ dist/
 ## Script
 scripts/ci/get-all-tests.sh
 
+## Secret info
+.env*
+!.env.example
+
+## Docker Compose
+## Per-developer local overrides — not committed; track the .example file instead.
+docker-compose.override.yml
+
 ## Some usage of this project
