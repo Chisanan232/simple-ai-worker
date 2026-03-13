@@ -19,12 +19,17 @@ Design decisions
 - Fails **fast** — the loader is called once at startup before any agent or
   crew is constructed, so a bad YAML file surfaces immediately rather than
   causing a cryptic error mid-run.
+- ``${VAR_NAME}`` placeholders in ``mcp_servers[*].headers`` values are
+  resolved against ``AppSettings`` (and the process environment as a
+  fallback) *before* Pydantic validation.  This keeps secret tokens out of
+  the YAML file while still providing a readable config format.
 
 Usage::
 
     from src.config.loader import load_agent_config
+    from src.config.settings import get_settings
 
-    config = load_agent_config("config/agents.yaml")
+    config = load_agent_config("config/agents.yaml", get_settings())
     for agent in config.agents:
         print(agent.id, agent.llm.model)
 
@@ -53,13 +58,18 @@ Test override example::
 from __future__ import annotations
 
 import logging
+import os
+import re
 from pathlib import Path
-from typing import List
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import yaml
 from pydantic import ValidationError
 
 from .agent_config import AgentTeamConfig
+
+if TYPE_CHECKING:
+    from src.config.settings import AppSettings
 
 __all__: List[str] = [
     "AgentConfigLoadError",
@@ -67,6 +77,9 @@ __all__: List[str] = [
 ]
 
 logger = logging.getLogger(__name__)
+
+# Matches ${UPPER_CASE_VAR_NAME} placeholders in YAML string values.
+_ENV_PLACEHOLDER_RE = re.compile(r"\$\{([A-Z0-9_]+)\}")
 
 
 class AgentConfigLoadError(Exception):
@@ -87,16 +100,116 @@ class AgentConfigLoadError(Exception):
         super().__init__(f"[{self.path}] {message}")
 
 
-def load_agent_config(path: str | Path) -> AgentTeamConfig:
+# ---------------------------------------------------------------------------
+# Placeholder resolution helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve_placeholder(var_name: str, settings: Optional["AppSettings"]) -> Optional[str]:
+    """Return the resolved value for *var_name* from settings or ``os.environ``.
+
+    Checks ``AppSettings`` first (handles ``SecretStr`` fields transparently),
+    then falls back to ``os.environ``.  Returns ``None`` if the variable is
+    not found in either source.
+
+    Args:
+        var_name: The environment variable / settings field name to look up.
+        settings: Optional :class:`~src.config.settings.AppSettings` instance.
+
+    Returns:
+        The resolved string value, or ``None`` if not found.
+    """
+    if settings is not None:
+        field_val = getattr(settings, var_name, None)
+        if field_val is not None:
+            from pydantic import SecretStr  # local import — avoid circular dep
+            return field_val.get_secret_value() if isinstance(field_val, SecretStr) else str(field_val)
+    # Fall back to the process environment.
+    return os.environ.get(var_name)
+
+
+def _resolve_string_placeholders(value: str, settings: Optional["AppSettings"]) -> str:
+    """Replace all ``${VAR_NAME}`` tokens in *value* with resolved values.
+
+    Placeholders that cannot be resolved (variable not found in settings or
+    environment) are left unchanged so that downstream validators can detect
+    and warn about them.
+
+    Args:
+        value: The string that may contain ``${…}`` placeholders.
+        settings: Optional :class:`~src.config.settings.AppSettings` used
+            as the primary resolution source.
+
+    Returns:
+        The string with all resolvable placeholders substituted.
+    """
+    def _replace(match: re.Match[str]) -> str:
+        resolved = _resolve_placeholder(match.group(1), settings)
+        if resolved is None:
+            logger.warning(
+                "MCP header placeholder '${%s}' could not be resolved — "
+                "token not found in AppSettings or environment.  "
+                "The literal placeholder will be used as-is.",
+                match.group(1),
+            )
+            return match.group(0)  # leave unchanged
+        return resolved
+
+    return _ENV_PLACEHOLDER_RE.sub(_replace, value)
+
+
+def _apply_header_placeholders(raw_data: Dict[str, Any], settings: Optional["AppSettings"]) -> None:
+    """Resolve ``${VAR}`` placeholders inside ``mcp_servers[*].headers`` in-place.
+
+    Walks the ``mcp_servers`` section of the raw parsed YAML dict and replaces
+    placeholder tokens in every header *value* string.  Keys are left
+    unchanged.  Operates in-place — no return value.
+
+    Args:
+        raw_data: The top-level dict produced by ``yaml.safe_load``.
+        settings: Optional :class:`~src.config.settings.AppSettings` used
+            for resolution.  When ``None`` only ``os.environ`` is consulted.
+    """
+    mcp_servers = raw_data.get("mcp_servers")
+    if not isinstance(mcp_servers, dict):
+        return
+    for server_id, server_cfg in mcp_servers.items():
+        if not isinstance(server_cfg, dict):
+            continue
+        headers = server_cfg.get("headers")
+        if not isinstance(headers, dict):
+            continue
+        resolved_headers: Dict[str, str] = {}
+        for header_key, header_val in headers.items():
+            if isinstance(header_val, str):
+                resolved_headers[header_key] = _resolve_string_placeholders(header_val, settings)
+            else:
+                resolved_headers[header_key] = header_val
+        server_cfg["headers"] = resolved_headers
+        logger.debug(
+            "Resolved header placeholders for MCP server '%s'.", server_id
+        )
+
+
+def load_agent_config(
+    path: str | Path,
+    settings: Optional["AppSettings"] = None,
+) -> AgentTeamConfig:
     """Load and validate the YAML agent configuration file.
 
-    Reads the file at *path*, parses it with ``yaml.safe_load``, and
-    validates the resulting dict against :class:`~src.config.agent_config.AgentTeamConfig`.
+    Reads the file at *path*, parses it with ``yaml.safe_load``, resolves
+    any ``${VAR_NAME}`` placeholders in ``mcp_servers[*].headers``, and
+    validates the resulting dict against
+    :class:`~src.config.agent_config.AgentTeamConfig`.
 
     Args:
         path: Filesystem path to the YAML agent configuration file.
             Relative paths are resolved from the current working directory
             (i.e. the project root when launched via ``uv run``).
+        settings: Optional :class:`~src.config.settings.AppSettings` instance
+            used to resolve ``${VAR_NAME}`` placeholders in MCP server header
+            values.  When ``None``, only ``os.environ`` is consulted for
+            placeholder resolution.
 
     Returns:
         A fully validated :class:`~src.config.agent_config.AgentTeamConfig`
@@ -111,8 +224,9 @@ def load_agent_config(path: str | Path) -> AgentTeamConfig:
     Example::
 
         from src.config.loader import load_agent_config
+        from src.config.settings import get_settings
 
-        config = load_agent_config("config/agents.yaml")
+        config = load_agent_config("config/agents.yaml", get_settings())
         print(config.process)           # "sequential"
         print(config.agents[0].id)      # "planner"
     """
@@ -148,6 +262,11 @@ def load_agent_config(path: str | Path) -> AgentTeamConfig:
         )
 
     # ------------------------------------------------------------------ #
+    # 2b. Resolve ${VAR} placeholders in mcp_servers headers
+    # ------------------------------------------------------------------ #
+    _apply_header_placeholders(raw_data, settings)
+
+    # ------------------------------------------------------------------ #
     # 3. Validate against Pydantic schema
     # ------------------------------------------------------------------ #
     try:
@@ -159,8 +278,10 @@ def load_agent_config(path: str | Path) -> AgentTeamConfig:
         ) from exc
 
     logger.info(
-        "Agent config loaded: process=%s, agents=%d (%s).",
+        "Agent config loaded: process=%s, mcp_servers=%d (%s), agents=%d (%s).",
         config.process,
+        len(config.mcp_servers),
+        ", ".join(config.mcp_servers.keys()) if config.mcp_servers else "none",
         len(config.agents),
         ", ".join(a.id for a in config.agents),
     )
