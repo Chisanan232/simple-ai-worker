@@ -1,0 +1,53 @@
+# =============================================================================
+# docker-compose.override.yml.example — Template for local dev overrides
+# =============================================================================
+#
+# This file is the committed template for docker-compose.override.yml.
+# docker-compose.override.yml itself is gitignored (per-developer).
+#
+# To activate local development overrides:
+#
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#
+# Docker Compose automatically merges docker-compose.override.yml with
+# docker-compose.yml when you run `docker compose up`.
+#
+# What the override enables:
+#   1. Host port mappings for MCP servers (direct curl inspection).
+#   2. Read-only src/ volume mount on application containers for faster
+#      iteration (restart container after code changes, no rebuild needed).
+#
+# =============================================================================
+
+services:
+
+  # Expose MCP server ports to the host for local inspection / debugging.
+  mcp-github:
+    ports:
+      - "8102:8102"
+
+  mcp-slack:
+    ports:
+      - "8103:8103"
+
+  mcp-jira:
+    ports:
+      - "8100:8100"
+
+  mcp-clickup:
+    ports:
+      - "8101:8101"
+
+  # Mount src/ read-only so the running container sees your latest Python
+  # changes without a full `docker compose build`.
+  # Restart the container after editing:
+  #   docker compose restart ai-scheduler
+  #   docker compose restart ai-slack-webhook
+  ai-scheduler:
+    volumes:
+      - ./src:/app/src:ro
+
+  ai-slack-webhook:
+    volumes:
+      - ./src:/app/src:ro
+
