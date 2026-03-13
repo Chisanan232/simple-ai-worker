@@ -70,7 +70,7 @@ class TestSlackMainRun:
         ):
             _run_async(__import__("src.slack_main", fromlist=["_run"])._run())
 
-        mock_load.assert_called_once_with("custom/path.yaml")
+        mock_load.assert_called_once_with("custom/path.yaml", fake_settings)
 
     def test_build_registry_called(self) -> None:
         """_run() must call build_registry with the loaded team config and settings."""

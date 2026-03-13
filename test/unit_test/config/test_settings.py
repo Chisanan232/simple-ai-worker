@@ -219,3 +219,86 @@ class TestGetSettings:
         monkeypatch.setenv("SCHEDULER_TIMEZONE", "America/New_York")
         settings = get_settings()
         assert settings.SCHEDULER_TIMEZONE == "America/New_York"
+
+
+# ===========================================================================
+# MCP settings — defaults and env-var overrides
+# ===========================================================================
+
+
+class TestMcpSettingsDefaults:
+    """Tests for MCP token and URL fields on AppSettings."""
+
+    def test_mcp_tokens_default_to_none(self) -> None:
+        """All MCP token fields default to None."""
+        s = AppSettings()
+        assert s.MCP_JIRA_TOKEN is None
+        assert s.MCP_CLICKUP_TOKEN is None
+        assert s.MCP_GITHUB_TOKEN is None
+        assert s.MCP_SLACK_TOKEN is None
+
+    def test_mcp_jira_url_default(self) -> None:
+        assert AppSettings().MCP_JIRA_URL == "http://127.0.0.1:8100/mcp"
+
+    def test_mcp_clickup_url_default(self) -> None:
+        assert AppSettings().MCP_CLICKUP_URL == "http://127.0.0.1:8101/mcp"
+
+    def test_mcp_github_url_default(self) -> None:
+        assert AppSettings().MCP_GITHUB_URL == "http://127.0.0.1:8102/mcp"
+
+    def test_mcp_slack_url_default(self) -> None:
+        assert AppSettings().MCP_SLACK_URL == "http://127.0.0.1:8103/mcp"
+
+
+class TestMcpSettingsFromEnv:
+    """Tests for MCP settings loaded from environment variables."""
+
+    def test_mcp_jira_token_loaded_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_JIRA_TOKEN", "jira-test-token")
+        s = AppSettings()
+        assert s.MCP_JIRA_TOKEN is not None
+        assert s.MCP_JIRA_TOKEN.get_secret_value() == "jira-test-token"
+
+    def test_mcp_clickup_token_loaded_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_CLICKUP_TOKEN", "clickup-tok")
+        s = AppSettings()
+        assert s.MCP_CLICKUP_TOKEN is not None
+        assert s.MCP_CLICKUP_TOKEN.get_secret_value() == "clickup-tok"
+
+    def test_mcp_github_token_loaded_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_GITHUB_TOKEN", "gh-tok")
+        s = AppSettings()
+        assert s.MCP_GITHUB_TOKEN is not None
+        assert s.MCP_GITHUB_TOKEN.get_secret_value() == "gh-tok"
+
+    def test_mcp_slack_token_loaded_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_SLACK_TOKEN", "slack-tok")
+        s = AppSettings()
+        assert s.MCP_SLACK_TOKEN is not None
+        assert s.MCP_SLACK_TOKEN.get_secret_value() == "slack-tok"
+
+    def test_mcp_jira_url_overridden_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_JIRA_URL", "https://jira-mcp.internal/mcp")
+        s = AppSettings()
+        assert s.MCP_JIRA_URL == "https://jira-mcp.internal/mcp"
+
+    def test_mcp_clickup_url_overridden_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_CLICKUP_URL", "https://clickup-mcp.internal/mcp")
+        s = AppSettings()
+        assert s.MCP_CLICKUP_URL == "https://clickup-mcp.internal/mcp"
+
+    def test_mcp_github_url_overridden_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_GITHUB_URL", "https://github-mcp.internal/mcp")
+        s = AppSettings()
+        assert s.MCP_GITHUB_URL == "https://github-mcp.internal/mcp"
+
+    def test_mcp_slack_url_overridden_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("MCP_SLACK_URL", "https://slack-mcp.internal/mcp")
+        s = AppSettings()
+        assert s.MCP_SLACK_URL == "https://slack-mcp.internal/mcp"
+
+    def test_mcp_token_repr_does_not_expose_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SecretStr tokens must not expose their value in repr()."""
+        monkeypatch.setenv("MCP_JIRA_TOKEN", "super-secret")
+        s = AppSettings()
+        assert "super-secret" not in repr(s.MCP_JIRA_TOKEN)

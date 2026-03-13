@@ -17,8 +17,9 @@ from pathlib import Path
 
 import pytest
 
-from src.config.agent_config import AgentTeamConfig
+from src.config.agent_config import AgentTeamConfig, MCPServerDefinition, MCPServerRef
 from src.config.loader import AgentConfigLoadError, load_agent_config
+from src.config.settings import AppSettings
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -297,3 +298,191 @@ class TestAgentConfigLoadError:
         """AgentConfigLoadError.message must match what was passed."""
         err = AgentConfigLoadError("/p", "my message")
         assert err.message == "my message"
+
+
+# ===========================================================================
+# MCP server registry — load_agent_config
+# ===========================================================================
+
+_MCP_YAML_WITH_REGISTRY = """\
+process: sequential
+
+mcp_servers:
+  jira:
+    type: http
+    url: "http://127.0.0.1:8100/mcp"
+    headers:
+      Authorization: "Bearer tok-jira"
+    tool_filter:
+      - create_issue
+      - search_issues
+    cache_tools_list: true
+  slack:
+    type: http
+    url: "http://127.0.0.1:8103/mcp"
+
+agents:
+  - id: planner
+    role: Product Planner
+    goal: Plan the product.
+    backstory: You are a planner.
+    llm:
+      provider: openai
+      model: gpt-4o
+    mcps:
+      - jira
+      - slack
+"""
+
+_MCP_YAML_WITH_OVERRIDE = """\
+process: sequential
+
+mcp_servers:
+  jira:
+    type: http
+    url: "http://127.0.0.1:8100/mcp"
+    tool_filter:
+      - create_issue
+      - search_issues
+      - update_issue
+
+agents:
+  - id: dev_lead
+    role: Tech Lead
+    goal: Lead.
+    backstory: You lead.
+    llm:
+      provider: openai
+      model: gpt-4o
+    mcps:
+      - server: jira
+        tool_filter:
+          - search_issues
+          - update_issue
+"""
+
+_MCP_YAML_WITH_PLACEHOLDER = """\
+process: sequential
+
+mcp_servers:
+  jira:
+    type: http
+    url: "http://127.0.0.1:8100/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_JIRA_TOKEN}"
+
+agents:
+  - id: planner
+    role: Planner
+    goal: Plan.
+    backstory: You plan.
+    llm:
+      provider: openai
+      model: gpt-4o
+    mcps:
+      - jira
+"""
+
+_MCP_YAML_UNKNOWN_REF = """\
+process: sequential
+
+mcp_servers:
+  jira:
+    type: http
+    url: "http://127.0.0.1:8100/mcp"
+
+agents:
+  - id: planner
+    role: Planner
+    goal: Plan.
+    backstory: You plan.
+    llm:
+      provider: openai
+      model: gpt-4o
+    mcps:
+      - clickup
+"""
+
+
+class TestLoadAgentConfigMcp:
+    """Tests for load_agent_config() with mcp_servers registry."""
+
+    def test_mcp_registry_loaded(self, tmp_path: Path) -> None:
+        """mcp_servers entries are parsed into MCPServerDefinition objects."""
+        path = _write(tmp_path, _MCP_YAML_WITH_REGISTRY)
+        config = load_agent_config(path)
+        assert "jira" in config.mcp_servers
+        assert "slack" in config.mcp_servers
+        assert isinstance(config.mcp_servers["jira"], MCPServerDefinition)
+
+    def test_mcp_server_fields_populated(self, tmp_path: Path) -> None:
+        """MCPServerDefinition fields are populated from YAML."""
+        path = _write(tmp_path, _MCP_YAML_WITH_REGISTRY)
+        config = load_agent_config(path)
+        jira = config.mcp_servers["jira"]
+        assert jira.url == "http://127.0.0.1:8100/mcp"
+        assert jira.tool_filter == ["create_issue", "search_issues"]
+        assert jira.cache_tools_list is True
+
+    def test_agent_mcps_plain_refs_loaded(self, tmp_path: Path) -> None:
+        """Agent mcps plain string references are loaded correctly."""
+        path = _write(tmp_path, _MCP_YAML_WITH_REGISTRY)
+        config = load_agent_config(path)
+        assert config.agents[0].mcps == ["jira", "slack"]
+
+    def test_agent_mcps_override_ref_loaded(self, tmp_path: Path) -> None:
+        """Agent mcps override mapping is loaded as MCPServerRef."""
+        path = _write(tmp_path, _MCP_YAML_WITH_OVERRIDE)
+        config = load_agent_config(path)
+        ref = config.agents[0].mcps[0]
+        assert isinstance(ref, MCPServerRef)
+        assert ref.server == "jira"
+        assert ref.tool_filter == ["search_issues", "update_issue"]
+
+    def test_unknown_mcp_ref_raises_load_error(self, tmp_path: Path) -> None:
+        """Agent referencing unknown mcp server ID raises AgentConfigLoadError."""
+        path = _write(tmp_path, _MCP_YAML_UNKNOWN_REF)
+        with pytest.raises(AgentConfigLoadError, match="unknown MCP server"):
+            load_agent_config(path)
+
+    def test_no_mcp_servers_section_is_valid(self, tmp_path: Path) -> None:
+        """YAML without mcp_servers section loads fine with empty dict."""
+        path = _write(tmp_path, _VALID_YAML)
+        config = load_agent_config(path)
+        assert config.mcp_servers == {}
+
+    def test_header_placeholder_resolved_from_settings(self, tmp_path: Path) -> None:
+        """${MCP_JIRA_TOKEN} in headers is resolved using provided AppSettings."""
+        path = _write(tmp_path, _MCP_YAML_WITH_PLACEHOLDER)
+        settings = AppSettings(OPENAI_API_KEY="sk-test", MCP_JIRA_TOKEN="resolved-tok")
+        config = load_agent_config(path, settings)
+        headers = config.mcp_servers["jira"].headers
+        assert headers is not None
+        assert headers["Authorization"] == "Bearer resolved-tok"
+
+    def test_header_placeholder_resolved_from_env(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """${MCP_JIRA_TOKEN} falls back to os.environ when not in AppSettings."""
+        monkeypatch.setenv("MCP_JIRA_TOKEN", "env-tok")
+        path = _write(tmp_path, _MCP_YAML_WITH_PLACEHOLDER)
+        config = load_agent_config(path)
+        headers = config.mcp_servers["jira"].headers
+        assert headers is not None
+        assert headers["Authorization"] == "Bearer env-tok"
+
+    def test_unresolvable_placeholder_left_unchanged(self, tmp_path: Path) -> None:
+        """Unresolvable ${PLACEHOLDER} is left as-is in headers."""
+        path = _write(tmp_path, _MCP_YAML_WITH_PLACEHOLDER)
+        # No settings, no env var set → placeholder stays
+        config = load_agent_config(path)
+        headers = config.mcp_servers["jira"].headers
+        assert headers is not None
+        assert headers["Authorization"] == "Bearer ${MCP_JIRA_TOKEN}"
+
+    def test_plain_header_value_unchanged(self, tmp_path: Path) -> None:
+        """A header value with no placeholder is passed through unchanged."""
+        path = _write(tmp_path, _MCP_YAML_WITH_REGISTRY)
+        # jira header in this fixture is 'Bearer tok-jira' (no placeholder)
+        config = load_agent_config(path)
+        assert config.mcp_servers
+        assert config.mcp_servers["jira"].headers
+        assert config.mcp_servers["jira"].headers["Authorization"] == "Bearer tok-jira"

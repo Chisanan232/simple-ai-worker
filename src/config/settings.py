@@ -217,6 +217,77 @@ class AppSettings(BaseSettings):
     application is launched.  Defaults to ``"config/agents.yaml"``.
     """
 
+    # ------------------------------------------------------------------
+    # MCP Server Authentication Tokens
+    # Resolved at agent-build time and injected into MCP server headers.
+    # Set these in .env or as environment variables in your deployment.
+    # ------------------------------------------------------------------
+
+    MCP_JIRA_TOKEN: Optional[SecretStr] = None
+    """Bearer token for the self-hosted JIRA MCP server.
+
+    Injected into the ``Authorization: Bearer …`` header when connecting
+    to the JIRA MCP server.  Required when ``mcp_servers.jira`` is
+    configured in ``agents.yaml``.
+    """
+
+    MCP_CLICKUP_TOKEN: Optional[SecretStr] = None
+    """Bearer token for the self-hosted ClickUp MCP server.
+
+    Injected into the ``Authorization: Bearer …`` header when connecting
+    to the ClickUp MCP server.  Required when ``mcp_servers.clickup`` is
+    configured in ``agents.yaml``.
+    """
+
+    MCP_GITHUB_TOKEN: Optional[SecretStr] = None
+    """Bearer token for the self-hosted GitHub MCP server.
+
+    Injected into the ``Authorization: Bearer …`` header when connecting
+    to the GitHub MCP server.  Required when ``mcp_servers.github`` is
+    configured in ``agents.yaml``.
+    """
+
+    MCP_SLACK_TOKEN: Optional[SecretStr] = None
+    """Bearer token for the self-hosted Slack MCP server.
+
+    Injected into the ``Authorization: Bearer …`` header when connecting
+    to the Slack MCP server.  Required when ``mcp_servers.slack`` is
+    configured in ``agents.yaml``.
+    """
+
+    # ------------------------------------------------------------------
+    # MCP Server Base URLs
+    # Defaults point to localhost ports for local development.
+    # Override per-deployment via environment variables or .env.
+    # Port convention: 8100=jira, 8101=clickup, 8102=github, 8103=slack
+    # ------------------------------------------------------------------
+
+    MCP_JIRA_URL: str = "http://127.0.0.1:8100/mcp"
+    """Base URL for the JIRA MCP server endpoint.
+
+    Defaults to ``http://127.0.0.1:8100/mcp`` for local development.
+    Override with ``MCP_JIRA_URL=https://jira-mcp.internal/mcp`` for
+    production deployments.
+    """
+
+    MCP_CLICKUP_URL: str = "http://127.0.0.1:8101/mcp"
+    """Base URL for the ClickUp MCP server endpoint.
+
+    Defaults to ``http://127.0.0.1:8101/mcp`` for local development.
+    """
+
+    MCP_GITHUB_URL: str = "http://127.0.0.1:8102/mcp"
+    """Base URL for the GitHub MCP server endpoint.
+
+    Defaults to ``http://127.0.0.1:8102/mcp`` for local development.
+    """
+
+    MCP_SLACK_URL: str = "http://127.0.0.1:8103/mcp"
+    """Base URL for the Slack MCP server endpoint.
+
+    Defaults to ``http://127.0.0.1:8103/mcp`` for local development.
+    """
+
 
 @functools.lru_cache(maxsize=1)
 def get_settings() -> AppSettings:

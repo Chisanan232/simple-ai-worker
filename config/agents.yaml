@@ -11,6 +11,88 @@
 
 process: sequential
 
+# =============================================================================
+# mcp_servers — MCP Server Registry
+# =============================================================================
+#
+# Defines all self-hosted MCP server connection details in one place.
+# Each entry is keyed by a short unique ID (e.g. "jira", "clickup").
+# Agents reference these IDs in their `mcps` list — no duplication required.
+#
+# ${VAR_NAME} placeholders in header values are resolved from AppSettings /
+# environment variables at agent-build time (tokens never live in this file).
+#
+# Add a new integration in 2 steps:
+#   1. Add a new entry here (e.g. "confluence")
+#   2. Add "- confluence" to the mcps list of whichever agents need it
+# =============================================================================
+
+mcp_servers:
+
+  # ---------------------------------------------------------------------------
+  # JIRA MCP Server
+  # Provides: create_issue, search_issues, update_issue, transition_issue
+  # ---------------------------------------------------------------------------
+  jira:
+    type: http
+    url: "http://127.0.0.1:8100/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_JIRA_TOKEN}"
+    tool_filter:
+      - create_issue
+      - search_issues
+      - update_issue
+      - transition_issue
+    cache_tools_list: true
+
+  # ---------------------------------------------------------------------------
+  # ClickUp MCP Server
+  # Provides: create_task, search_tasks, update_task
+  # ---------------------------------------------------------------------------
+  clickup:
+    type: http
+    url: "http://127.0.0.1:8101/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_CLICKUP_TOKEN}"
+    tool_filter:
+      - create_task
+      - search_tasks
+      - update_task
+    cache_tools_list: true
+
+  # ---------------------------------------------------------------------------
+  # GitHub MCP Server
+  # Provides: create_pull_request, search_repositories
+  # ---------------------------------------------------------------------------
+  github:
+    type: http
+    url: "http://127.0.0.1:8102/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_GITHUB_TOKEN}"
+    tool_filter:
+      - create_pull_request
+      - search_repositories
+    cache_tools_list: true
+
+  # ---------------------------------------------------------------------------
+  # Slack MCP Server
+  # Provides: send_message, reply_to_thread, get_messages
+  # ---------------------------------------------------------------------------
+  slack:
+    type: http
+    url: "http://127.0.0.1:8103/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_SLACK_TOKEN}"
+    tool_filter:
+      - send_message
+      - reply_to_thread
+      - get_messages
+    cache_tools_list: false
+
+# =============================================================================
+# agents — Agent Team Definitions
+# =============================================================================
+
 agents:
 
   # ---------------------------------------------------------------------------
@@ -39,13 +121,12 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 120
-    apps:
-      - jira/create_issue
-      - jira/search_issues
-      - clickup/create_task
-      - clickup/search_tasks
-      - slack/send_message
-      - slack/reply_to_thread
+    # MCP servers available to this agent (references mcp_servers registry above)
+    mcps:
+      - jira
+      - clickup
+      - slack
+    apps: []
     allow_delegation: false
     verbose: false
 
@@ -76,16 +157,11 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 120
-    apps:
-      - jira/search_issues
-      - jira/create_issue
-      - jira/update_issue
-      - jira/transition_issue
-      - clickup/search_tasks
-      - clickup/create_task
-      - clickup/update_task
-      - slack/send_message
-      - slack/reply_to_thread
+    mcps:
+      - jira
+      - clickup
+      - slack
+    apps: []
     allow_delegation: false
     verbose: false
 
@@ -114,14 +190,11 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 180
-    apps:
-      - jira/search_issues
-      - jira/update_issue
-      - jira/transition_issue
-      - clickup/search_tasks
-      - clickup/update_task
-      - github/create_pull_request
-      - github/search_repositories
-      - slack/send_message
+    mcps:
+      - jira
+      - clickup
+      - github
+      - slack
+    apps: []
     allow_delegation: false
     verbose: false
