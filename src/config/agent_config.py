@@ -58,7 +58,7 @@ Design decisions
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Union
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
