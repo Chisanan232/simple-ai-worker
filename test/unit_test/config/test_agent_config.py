@@ -306,7 +306,7 @@ class TestMCPServerDefinition:
 
     def test_invalid_type_raises(self) -> None:
         with pytest.raises(ValidationError):
-            MCPServerDefinition(type="grpc", url="http://x")  # type: ignore[arg-type]
+            MCPServerDefinition(type="grpc", url="http://x")
 
     def test_stdio_args_default_empty_list(self) -> None:
         defn = MCPServerDefinition(type="stdio", command="python")

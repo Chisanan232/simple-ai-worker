@@ -483,4 +483,6 @@ class TestLoadAgentConfigMcp:
         path = _write(tmp_path, _MCP_YAML_WITH_REGISTRY)
         # jira header in this fixture is 'Bearer tok-jira' (no placeholder)
         config = load_agent_config(path)
+        assert config.mcp_servers
+        assert config.mcp_servers["jira"].headers
         assert config.mcp_servers["jira"].headers["Authorization"] == "Bearer tok-jira"
