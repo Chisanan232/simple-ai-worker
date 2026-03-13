@@ -89,7 +89,7 @@ mcp_servers:
   # ---------------------------------------------------------------------------
   jira:
     type: http
-    url: "http://127.0.0.1:8100/mcp"    # override via MCP_JIRA_URL env var
+    url: "${MCP_JIRA_URL}"              # resolved from .env / env at startup
     headers:
       Authorization: "Bearer ${MCP_JIRA_TOKEN}"   # resolved from .env / env
     tool_filter:                         # omit this block to expose all tools
@@ -101,7 +101,7 @@ mcp_servers:
 
   clickup:
     type: http
-    url: "http://127.0.0.1:8101/mcp"
+    url: "${MCP_CLICKUP_URL}"
     headers:
       Authorization: "Bearer ${MCP_CLICKUP_TOKEN}"
     tool_filter:
@@ -112,7 +112,7 @@ mcp_servers:
 
   github:
     type: http
-    url: "http://127.0.0.1:8102/mcp"
+    url: "${MCP_GITHUB_URL}"
     headers:
       Authorization: "Bearer ${MCP_GITHUB_TOKEN}"
     tool_filter:
@@ -122,7 +122,7 @@ mcp_servers:
 
   slack:
     type: http
-    url: "http://127.0.0.1:8103/mcp"
+    url: "${MCP_SLACK_URL}"
     headers:
       Authorization: "Bearer ${MCP_SLACK_TOKEN}"
     tool_filter:
