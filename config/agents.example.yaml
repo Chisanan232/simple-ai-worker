@@ -30,13 +30,146 @@
 process: sequential
 
 
+# =============================================================================
+# mcp_servers  (optional, dict keyed by server ID, default: {})
+# =============================================================================
+#
+# LAYER 1 — The MCP Server Registry.
+#
+# Defines all self-hosted MCP (Model Context Protocol) server connection
+# details in one central place.  Each entry is keyed by a short, unique
+# identifier (e.g. "jira", "clickup").  Agents reference these IDs in their
+# `mcps` list — no configuration is ever duplicated across agents.
+#
+# How to add a new integration in 2 steps:
+#   1. Add a new entry here (e.g. "confluence")
+#   2. Add "- confluence" to the `mcps` list of whichever agents need it
+#
+# Placeholder resolution:
+#   ${VAR_NAME} tokens in `headers` values are automatically replaced with
+#   the value of the matching AppSettings field or OS environment variable
+#   at agent-build time.  This keeps secrets out of YAML.
+#   Supported patterns:
+#     ${MCP_JIRA_TOKEN}    → AppSettings.MCP_JIRA_TOKEN   (SecretStr)
+#     ${MCP_GITHUB_TOKEN}  → AppSettings.MCP_GITHUB_TOKEN (SecretStr)
+#     ${ANY_ENV_VAR}       → os.environ["ANY_ENV_VAR"]
+#
 # -----------------------------------------------------------------------------
+# Supported transport types
+# -----------------------------------------------------------------------------
+#
+# type: http   — HTTP/Streamable-HTTP (recommended for self-hosted servers)
+#   url              (required) Full URL to the MCP endpoint.
+#   headers          (optional) Dict of HTTP headers (use ${TOKEN} placeholders).
+#   streamable       (optional, default: true) Use chunked-streaming POST.
+#   tool_filter      (optional) Allow-list of tool names. Omit = all tools.
+#   cache_tools_list (optional, default: false) Cache tool schemas after first
+#                    connect. Set true for stable servers (JIRA, GitHub) to
+#                    avoid repeated list_tools() round-trips.
+#
+# type: sse    — Server-Sent Events (for legacy MCP servers)
+#   url              (required)
+#   headers          (optional)
+#   tool_filter      (optional)
+#   cache_tools_list (optional, default: false)
+#
+# type: stdio  — Subprocess via stdin/stdout (for local MCP servers)
+#   command          (required) Executable to launch (e.g. "python", "npx").
+#   args             (optional) List of arguments.
+#   env              (optional) Dict of environment variables for the process.
+#   tool_filter      (optional)
+#   cache_tools_list (optional, default: false)
+#
+# -----------------------------------------------------------------------------
+
+mcp_servers:
+
+  # ---------------------------------------------------------------------------
+  # Example: HTTP transport (recommended)
+  # ---------------------------------------------------------------------------
+  jira:
+    type: http
+    url: "http://127.0.0.1:8100/mcp"    # override via MCP_JIRA_URL env var
+    headers:
+      Authorization: "Bearer ${MCP_JIRA_TOKEN}"   # resolved from .env / env
+    tool_filter:                         # omit this block to expose all tools
+      - create_issue
+      - search_issues
+      - update_issue
+      - transition_issue
+    cache_tools_list: true               # safe: JIRA tool schema rarely changes
+
+  clickup:
+    type: http
+    url: "http://127.0.0.1:8101/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_CLICKUP_TOKEN}"
+    tool_filter:
+      - create_task
+      - search_tasks
+      - update_task
+    cache_tools_list: true
+
+  github:
+    type: http
+    url: "http://127.0.0.1:8102/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_GITHUB_TOKEN}"
+    tool_filter:
+      - create_pull_request
+      - search_repositories
+    cache_tools_list: true
+
+  slack:
+    type: http
+    url: "http://127.0.0.1:8103/mcp"
+    headers:
+      Authorization: "Bearer ${MCP_SLACK_TOKEN}"
+    tool_filter:
+      - send_message
+      - reply_to_thread
+      - get_messages
+    cache_tools_list: false              # set true if Slack tool schema is stable
+
+  # ---------------------------------------------------------------------------
+  # Example: SSE transport (legacy MCP servers)
+  # ---------------------------------------------------------------------------
+  # confluence:
+  #   type: sse
+  #   url: "http://127.0.0.1:8104/mcp/sse"
+  #   headers:
+  #     Authorization: "Bearer ${MCP_CONFLUENCE_TOKEN}"
+  #   tool_filter:
+  #     - search_pages
+  #     - create_page
+  #   cache_tools_list: false
+
+  # ---------------------------------------------------------------------------
+  # Example: stdio transport (local subprocess MCP server)
+  # ---------------------------------------------------------------------------
+  # local_fs:
+  #   type: stdio
+  #   command: npx
+  #   args:
+  #     - "-y"
+  #     - "@modelcontextprotocol/server-filesystem"
+  #     - "/tmp/workspace"
+  #   tool_filter:
+  #     - read_file
+  #     - write_file
+  #   cache_tools_list: false
+
+
+# =============================================================================
 # agents  (required, must contain at least one entry)
-# -----------------------------------------------------------------------------
-# A list of agent definitions.  Each agent maps to a single crewai.Agent
-# instance built by src/agents/factory.py in Phase 4.
+# =============================================================================
+#
+# LAYER 2 — Agent definitions.  Each agent references MCP servers by ID from
+# the `mcp_servers` registry above.
 #
 # All agent `id` values must be unique within this file.
+# All IDs listed in `mcps` must match a key in `mcp_servers`; the loader
+# raises a clear error immediately if a reference cannot be resolved.
 #
 agents:
 
@@ -45,28 +178,24 @@ agents:
   # ---------------------------------------------------------------------------
   - # id  (required, string, must be unique)
     # Unique identifier for this agent.  Used as the dictionary key in
-    # AgentRegistry (Phase 4).  Stick to snake_case for clarity.
+    # AgentRegistry.  Stick to snake_case for clarity.
     # Examples: "planner", "dev_lead", "dev_agent", "qa_agent"
     id: planner
 
     # role  (required, string)
-    # Short role title passed to crewai.Agent as the `role` argument.
-    # This appears in CrewAI's logging and in the LLM system prompt.
+    # Short role title shown in CrewAI logging and the LLM system prompt.
     # Examples: "Product Planner", "Technical Dev Lead", "Software Developer"
     role: Product Planner
 
     # goal  (required, string)
-    # One-sentence (or short paragraph) goal statement.
-    # Tells the agent what it is ultimately trying to achieve.
+    # One-sentence goal statement — what the agent is trying to achieve.
     # YAML block scalar (>) folds newlines into spaces — good for long text.
     goal: >
       Understand product requirements from human stakeholders and create
       well-structured epic or story tickets in JIRA and ClickUp.
 
     # backstory  (required, string)
-    # Multi-sentence persona / background story.
-    # Fed to the LLM as part of the system prompt to shape the agent's
-    # tone, expertise, and behaviour.
+    # Multi-sentence persona fed to the LLM to shape tone and behaviour.
     backstory: >
       You are a seasoned product planner with 10+ years of experience in agile
       software development. You excel at distilling vague business requirements
@@ -84,9 +213,8 @@ agents:
       provider: openai
 
       # model  (required, string)
-      # The model identifier passed to crewai.LLM.
-      # OpenAI examples:    gpt-4o, gpt-4o-mini, gpt-4-turbo, o1-preview
-      # Anthropic examples: claude-3-5-sonnet-latest, claude-3-opus-latest
+      # OpenAI:    gpt-4o, gpt-4o-mini, gpt-4-turbo, o1-preview
+      # Anthropic: claude-3-5-sonnet-latest, claude-3-opus-latest
       model: gpt-4o
 
       # options  (optional — all sub-fields have defaults)
@@ -113,34 +241,39 @@ agents:
         # Increase for complex tasks that may take longer to respond.
         timeout: 120
 
+    # mcps  (optional, list, default: [])   ← LAYER 2 references
+    # -------------------------------------------------------------------------
+    # List of MCP server IDs from the `mcp_servers` registry above.
+    # Each entry is one of:
+    #
+    #   Plain string reference — use the registry definition as-is:
+    #     - jira
+    #     - clickup
+    #
+    #   Override mapping — reference the registry but narrow the tool_filter
+    #   for THIS agent only (URL, transport, and auth remain from registry):
+    #     - server: jira
+    #       tool_filter:
+    #         - create_issue
+    #         - search_issues
+    #
+    # Use plain strings when the registry tool_filter is already correct for
+    # this agent.  Use the override mapping when different agents need
+    # different tool subsets from the same server.
+    # -------------------------------------------------------------------------
+    mcps:
+      - jira          # plain reference → uses all tools from registry
+      - clickup
+      - slack
+
     # apps  (optional, list of strings, default: [])
-    # List of CrewAI Enterprise native action IDs to attach to this agent.
+    # ---------------------------------------------------------------------------
+    # DEPRECATED — use `mcps` for new integrations.
+    # Legacy CrewAI Enterprise native action IDs (e.g. "jira/create_issue").
     # Passed directly to crewai.Agent(apps=[...]).
-    # Action IDs are populated in Phase 5.
-    #
-    # Format: "<service>/<action>"
-    # Examples:
-    #   - jira/create_issue
-    #   - jira/search_issues
-    #   - jira/update_issue
-    #   - jira/transition_issue
-    #   - clickup/create_task
-    #   - clickup/search_tasks
-    #   - clickup/update_task
-    #   - github/create_pull_request
-    #   - github/search_repositories
-    #   - slack/send_message
-    #   - slack/reply_to_thread
-    #   - slack/get_messages
-    #
-    # Leave empty ([]) until Phase 5 — agents work without tools in earlier phases.
-    apps:
-      - jira/create_issue
-      - jira/search_issues
-      - clickup/create_task
-      - clickup/search_tasks
-      - slack/send_message
-      - slack/reply_to_thread
+    # Set to [] when using mcps; both fields coexist during migration.
+    # ---------------------------------------------------------------------------
+    apps: []
 
     # allow_delegation  (bool, default: false)
     # Whether this agent may delegate tasks to other agents in the same crew.
@@ -172,16 +305,16 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 120
-    apps:
-      - jira/search_issues
-      - jira/create_issue
-      - jira/update_issue
-      - jira/transition_issue
-      - clickup/search_tasks
-      - clickup/create_task
-      - clickup/update_task
-      - slack/send_message
-      - slack/reply_to_thread
+    # Example of the override mapping syntax — restrict jira tools for this agent
+    mcps:
+      - server: jira
+        tool_filter:
+          - search_issues
+          - update_issue
+          - transition_issue
+      - clickup
+      - slack
+    apps: []
     allow_delegation: false
     verbose: false
 
@@ -202,14 +335,11 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 180
-    apps:
-      - jira/search_issues
-      - jira/update_issue
-      - jira/transition_issue
-      - clickup/search_tasks
-      - clickup/update_task
-      - github/create_pull_request
-      - github/search_repositories
-      - slack/send_message
+    mcps:
+      - jira
+      - clickup
+      - github          # dev_agent is the only role that needs GitHub
+      - slack
+    apps: []
     allow_delegation: false
     verbose: false
