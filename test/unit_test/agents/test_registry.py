@@ -7,12 +7,18 @@ crewai.Agent and crewai.LLM are patched wherever needed.
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 
 from src.agents.registry import AgentRegistry, build_registry
-from src.config.agent_config import AgentConfig, AgentTeamConfig, LLMConfig, LLMOptions
+from src.config.agent_config import (
+    AgentConfig,
+    AgentTeamConfig,
+    LLMConfig,
+    LLMOptions,
+    MCPServerDefinition,
+)
 from src.config.settings import AppSettings
 
 # ---------------------------------------------------------------------------
@@ -26,18 +32,31 @@ def _mock_agent(role: str = "Planner") -> MagicMock:
     return agent
 
 
-def _make_agent_cfg(agent_id: str, role: str = "Planner") -> AgentConfig:
+def _make_agent_cfg(agent_id: str, role: str = "Planner", mcps: list | None = None) -> AgentConfig:
     return AgentConfig(
         id=agent_id,
         role=role,
         goal="Do stuff.",
         backstory="A person.",
         llm=LLMConfig(provider="openai", model="gpt-4o", options=LLMOptions()),
+        mcps=mcps or [],
     )
 
 
 def _make_team(*agent_ids: str) -> AgentTeamConfig:
     return AgentTeamConfig(agents=[_make_agent_cfg(aid) for aid in agent_ids])
+
+
+def _make_team_with_mcps(mcp_servers: dict, agent_mcps: dict[str, list]) -> AgentTeamConfig:
+    """Build an AgentTeamConfig with mcp_servers registry and per-agent mcps."""
+    agents = [
+        _make_agent_cfg(aid, mcps=agent_mcps.get(aid, []))
+        for aid in agent_mcps
+    ]
+    return AgentTeamConfig(
+        mcp_servers={k: MCPServerDefinition(**v) for k, v in mcp_servers.items()},
+        agents=agents,
+    )
 
 
 def _make_settings() -> AppSettings:
@@ -222,3 +241,76 @@ class TestBuildRegistry:
             build_registry(team, settings)
 
         assert MockAgent.call_count == 2
+
+
+# ===========================================================================
+# build_registry — MCP server registry propagation
+# ===========================================================================
+
+
+class TestBuildRegistryMcp:
+    """Verify build_registry forwards mcp_servers to AgentFactory.build()."""
+
+    def test_build_registry_passes_mcp_servers_to_factory(self) -> None:
+        """build_registry forwards team_config.mcp_servers to every AgentFactory.build call."""
+        mcp_defs = {
+            "jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"},
+        }
+        team = _make_team_with_mcps(
+            mcp_servers=mcp_defs,
+            agent_mcps={"planner": ["jira"]},
+        )
+        settings = _make_settings()
+
+        with (
+            patch("src.agents.llm_factory.LLM"),
+            patch("src.agents.factory.Agent", return_value=_mock_agent()),
+            patch("src.agents.factory.AgentFactory.build", return_value=_mock_agent()) as mock_build,
+        ):
+            build_registry(team, settings)
+
+        mock_build.assert_called_once()
+        _, kwargs = mock_build.call_args
+        assert "mcp_servers" in kwargs
+        assert "jira" in kwargs["mcp_servers"]
+
+    def test_build_registry_passes_same_mcp_servers_to_all_agents(self) -> None:
+        """The same mcp_servers dict is passed to every AgentFactory.build call."""
+        mcp_defs = {
+            "jira": {"type": "http", "url": "http://127.0.0.1:8100/mcp"},
+            "slack": {"type": "http", "url": "http://127.0.0.1:8103/mcp"},
+        }
+        team = _make_team_with_mcps(
+            mcp_servers=mcp_defs,
+            agent_mcps={
+                "planner": ["jira", "slack"],
+                "dev_lead": ["jira", "slack"],
+            },
+        )
+        settings = _make_settings()
+
+        with (
+            patch("src.agents.llm_factory.LLM"),
+            patch("src.agents.factory.Agent", return_value=_mock_agent()),
+            patch("src.agents.factory.AgentFactory.build", return_value=_mock_agent()) as mock_build,
+        ):
+            build_registry(team, settings)
+
+        assert mock_build.call_count == 2
+        for c in mock_build.call_args_list:
+            _, kwargs = c
+            assert kwargs["mcp_servers"] is team.mcp_servers
+
+    def test_build_registry_empty_mcp_servers_still_works(self) -> None:
+        """build_registry works normally when mcp_servers is empty."""
+        team = _make_team("planner")
+        settings = _make_settings()
+
+        with (
+            patch("src.agents.llm_factory.LLM"),
+            patch("src.agents.factory.Agent", return_value=_mock_agent()),
+        ):
+            registry = build_registry(team, settings)
+
+        assert "planner" in registry
+

@@ -158,13 +158,18 @@ def build_registry(
     *team_config*, builds a ``crewai.Agent`` via
     :class:`~src.agents.factory.AgentFactory`, and registers it.
 
+    The ``mcp_servers`` registry from *team_config* is forwarded into
+    every :meth:`~src.agents.factory.AgentFactory.build` call so that
+    MCP server references in each agent's ``mcps`` list are resolved to
+    ``crewai.mcp`` config objects at construction time.
+
     This function is the recommended way to initialise the registry at
     application startup:
 
     .. code-block:: python
 
         settings = get_settings()
-        team_config = load_agent_config(settings.AGENT_CONFIG_PATH)
+        team_config = load_agent_config(settings.AGENT_CONFIG_PATH, settings)
         registry = build_registry(team_config, settings)
 
     Args:
@@ -178,7 +183,11 @@ def build_registry(
     """
     registry = AgentRegistry()
     for agent_cfg in team_config.agents:
-        agent = AgentFactory.build(agent_cfg, settings)
+        agent = AgentFactory.build(
+            agent_cfg,
+            settings,
+            mcp_servers=team_config.mcp_servers,
+        )
         registry.register(agent_cfg.id, agent)
 
     logger.info(
