@@ -7,7 +7,7 @@
 #   MCP Servers (internal-only, no host port exposure in this file):
 #     mcp-github    — GitHub MCP server   (container port 8102)
 #     mcp-slack     — Slack MCP server    (container port 8103)
-#     mcp-jira      — JIRA MCP server     (container port 8100)
+#     mcp-jira      — JIRA MCP server     (container port 8100)  [sooperset/mcp-atlassian]
 #     mcp-clickup   — ClickUp MCP server  (container port 8101)
 #
 #   Applications (built from local Dockerfile):
@@ -130,23 +130,25 @@ services:
 
   # --------------------------------------------------------------------------
   # MCP Server: JIRA (Atlassian)
-  # https://github.com/atlassian/atlassian-mcp-server
+  # https://github.com/sooperset/mcp-atlassian
   # --------------------------------------------------------------------------
   mcp-jira:
-    image: ghcr.io/atlassian/atlassian-mcp-server:latest
+    image: ghcr.io/sooperset/mcp-atlassian:latest
     container_name: mcp-jira
+    # Pass CLI args to the mcp-atlassian entrypoint: SSE transport on port 8100.
+    command: ["--transport", "sse", "--port", "8100"]
     networks:
       - simple-ai-network
     environment:
-      # Atlassian auth uses email + API token (not a Bearer token in headers).
-      ATLASSIAN_URL: ${ATLASSIAN_URL}
-      ATLASSIAN_EMAIL: ${ATLASSIAN_EMAIL}
-      ATLASSIAN_API_TOKEN: ${MCP_JIRA_TOKEN}
-      PORT: "8100"
+      # sooperset/mcp-atlassian uses JIRA_* env vars for authentication.
+      JIRA_URL: ${ATLASSIAN_URL}
+      JIRA_USERNAME: ${ATLASSIAN_EMAIL}
+      JIRA_API_TOKEN: ${MCP_JIRA_TOKEN}
     expose:
       - "8100"
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8100/health || exit 1"]
+      # sooperset/mcp-atlassian exposes /healthz (not /health).
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8100/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
