@@ -166,16 +166,16 @@ class MCPServerDefinition(BaseModel):
 
     type: Literal["http", "sse", "stdio"]
     # http / sse fields
-    url: Union[str, None] = None
-    headers: Union[Dict[str, str], None] = None
+    url: str | None = None
+    headers: Dict[str, str] | None = None
     streamable: bool = True
     # all transports
-    tool_filter: Union[List[str], None] = None
+    tool_filter: List[str] | None = None
     cache_tools_list: bool = False
     # stdio fields
-    command: Union[str, None] = None
+    command: str | None = None
     args: List[str] = Field(default_factory=list)
-    env: Union[Dict[str, str], None] = None
+    env: Dict[str, str] | None = None
 
     @model_validator(mode="after")
     def validate_required_fields_per_type(self) -> "MCPServerDefinition":
@@ -205,11 +205,11 @@ class MCPServerRef(BaseModel):
     """
 
     server: str = Field(min_length=1)
-    tool_filter: Union[List[str], None] = None
+    tool_filter: List[str] | None = None
 
 
 # Type alias: a plain server-ID string  OR  an MCPServerRef override mapping.
-MCPRef = Union[str, MCPServerRef]
+MCPRef = str | MCPServerRef
 
 
 class AgentConfig(BaseModel):

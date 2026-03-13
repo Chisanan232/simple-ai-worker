@@ -105,7 +105,7 @@ class AgentFactory:
             crewai_mcps = resolved if resolved else None
 
         logger.debug(
-            "Building Agent: id=%s, role=%s, provider=%s, model=%s, " "apps=%s, mcp_servers=%s.",
+            "Building Agent: id=%s, role=%s, provider=%s, model=%s, apps=%s, mcp_servers=%s.",
             agent_config.id,
             agent_config.role,
             agent_config.llm.provider,
@@ -135,7 +135,7 @@ class AgentFactory:
         refs: List["MCPRef"],
         registry: Dict[str, "MCPServerDefinition"],
         settings: "AppSettings",
-    ) -> List[Union[MCPServerHTTP, MCPServerSSE, MCPServerStdio]]:
+    ) -> List[MCPServerHTTP | MCPServerSSE | MCPServerStdio]:
         """Resolve agent MCP ID references to ``crewai.mcp`` config objects.
 
         For each entry in *refs*:
@@ -157,7 +157,7 @@ class AgentFactory:
             MCPServerRef,  # local import avoids circular dep
         )
 
-        result: List[Union[MCPServerHTTP, MCPServerSSE, MCPServerStdio]] = []
+        result: List[MCPServerHTTP | MCPServerSSE | MCPServerStdio] = []
         for ref in refs:
             if isinstance(ref, str):
                 server_id = ref
@@ -184,7 +184,7 @@ class AgentFactory:
         defn: "MCPServerDefinition",
         tool_filter: Optional[List[str]],
         settings: "AppSettings",
-    ) -> Union[MCPServerHTTP, MCPServerSSE, MCPServerStdio]:
+    ) -> MCPServerHTTP | MCPServerSSE | MCPServerStdio:
         """Convert one :class:`~src.config.agent_config.MCPServerDefinition`
         into the matching ``crewai.mcp`` config object.
 
