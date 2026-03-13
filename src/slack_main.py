@@ -70,7 +70,7 @@ async def _run() -> None:
         settings.MAX_CONCURRENT_DEV_AGENTS,
     )
 
-    agent_team = load_agent_config(settings.AGENT_CONFIG_PATH)
+    agent_team = load_agent_config(settings.AGENT_CONFIG_PATH, settings)
     registry = build_registry(agent_team, settings)
     logger.info(
         "Agent registry ready: %d agent(s) — %s.",
