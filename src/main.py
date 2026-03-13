@@ -112,7 +112,7 @@ def main() -> None:
     )
 
     # Load agent team config and build the registry.
-    agent_team = load_agent_config(settings.AGENT_CONFIG_PATH)
+    agent_team = load_agent_config(settings.AGENT_CONFIG_PATH, settings)
     _registry = build_registry(agent_team, settings)
     logger.info(
         "Agent registry ready: %d agent(s) — %s.",

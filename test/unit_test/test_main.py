@@ -201,7 +201,7 @@ class TestMain:
         ):
             main_module.main()
 
-        mock_load.assert_called_once_with("custom/agents.yaml")
+        mock_load.assert_called_once_with("custom/agents.yaml", fake_settings)
 
     def test_main_builds_registry_from_team_config_and_settings(self) -> None:
         """main() must call build_registry with the loaded team config and settings."""
