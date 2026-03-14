@@ -98,6 +98,3 @@ def _isolate_app_settings_from_env_file(monkeypatch: pytest.MonkeyPatch) -> None
     # 2. Strip project env vars from the OS environment.
     for var in _PROJECT_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
-
-
-

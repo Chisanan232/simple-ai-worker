@@ -58,4 +58,3 @@ services:
     volumes:
       - ./src:/app/src:ro
       - ./config/agents.yaml:/app/config/agents.yaml:ro
-

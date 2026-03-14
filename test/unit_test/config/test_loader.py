@@ -300,6 +300,7 @@ class TestLoadAgentConfigErrors:
 
     def test_invalid_yaml_error_chained_yaml_error(self, tmp_path: Path) -> None:
         import yaml
+
         path = _write(tmp_path, "agents: [\n  bad: {{{")
         with pytest.raises(AgentConfigLoadError) as exc_info:
             load_agent_config(path)
@@ -327,6 +328,7 @@ agents:
 
     def test_schema_validation_error_chained_pydantic_error(self, tmp_path: Path) -> None:
         from pydantic import ValidationError
+
         bad_yaml = """\
 agents:
   - id: planner

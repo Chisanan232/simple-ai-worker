@@ -11,7 +11,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![linting: pylint](https://img.shields.io/badge/linting-pylint-yellowgreen)](https://github.com/pylint-dev/pylint)
 
-A production-ready, AI-powered worker that runs autonomous [CrewAI](https://crewai.com) agents on a schedule and responds to Slack events.  
+A production-ready, AI-powered worker that runs autonomous [CrewAI](https://crewai.com) agents on a schedule and responds to Slack events.
 The image serves **two service modes** selectable via the `SERVICE_TYPE` environment variable:
 
 | Mode      | Entry-point         | Description                                                                                                |
@@ -146,7 +146,7 @@ docker run -d \
 
 ### Agent configuration (required)
 
-The container reads agent definitions from `config/agents.yaml` at the path specified by `AGENT_CONFIG_PATH`.  
+The container reads agent definitions from `config/agents.yaml` at the path specified by `AGENT_CONFIG_PATH`.
 **Mount your local config file into the container so it is available at runtime without rebuilding the image:**
 
 ```bash
@@ -155,8 +155,8 @@ The container reads agent definitions from `config/agents.yaml` at the path spec
 
 Use `config/agents.example.yaml` from the [GitHub repository](https://github.com/Chisanan232/simple-ai-worker) as a starting template.
 
-> ⚠️ **Important — Docker Compose list-merging behaviour**  
-> If you use an override file alongside `docker-compose.yml`, Docker Compose **replaces** list-type keys (`volumes`, `ports`, …) rather than appending to them.  
+> ⚠️ **Important — Docker Compose list-merging behaviour**
+> If you use an override file alongside `docker-compose.yml`, Docker Compose **replaces** list-type keys (`volumes`, `ports`, …) rather than appending to them.
 > Always include **both** volume entries in your override file:
 > ```yaml
 > volumes:
@@ -166,7 +166,7 @@ Use `config/agents.example.yaml` from the [GitHub repository](https://github.com
 
 ### Source hot-reload (development only)
 
-Mount `src/` read-only to pick up Python code changes without rebuilding the image.  
+Mount `src/` read-only to pick up Python code changes without rebuilding the image.
 Restart the container after editing to reload the changes:
 
 ```bash
@@ -228,7 +228,7 @@ Override host port exposure is provided in `docker-compose.override.yml` (applie
 
 ## 📋 Jira / Atlassian Notes
 
-`mcp-jira` uses [sooperset/mcp-atlassian](https://github.com/sooperset/mcp-atlassian) and **validates Atlassian credentials at startup** before binding its HTTP port.  
+`mcp-jira` uses [sooperset/mcp-atlassian](https://github.com/sooperset/mcp-atlassian) and **validates Atlassian credentials at startup** before binding its HTTP port.
 If `ATLASSIAN_URL`, `ATLASSIAN_EMAIL`, or `MCP_JIRA_TOKEN` are empty or placeholder values, the server will start but **never open port 8100** — the health check will report `Connection refused`.
 
 To use Jira integration, set all three in `.env`:
@@ -249,7 +249,7 @@ Then change the `mcp-jira` dependency condition in `docker-compose.yml` from `se
 docker build -t simple-ai-worker:local .
 ```
 
-> **Note** — The Dockerfile uses a multi-stage build.  The final stage removes `/app/.venv/bin/uv` and `/app/.venv/bin/uvx` that `uv sync` plants inside the venv during the build stage, preventing an `Exec format error` caused by architecture-mismatched binaries on the `PATH`.  
+> **Note** — The Dockerfile uses a multi-stage build.  The final stage removes `/app/.venv/bin/uv` and `/app/.venv/bin/uvx` that `uv sync` plants inside the venv during the build stage, preventing an `Exec format error` caused by architecture-mismatched binaries on the `PATH`.
 > `UV_NO_CACHE=1` is set in the final stage to prevent `uv run` from attempting to write a package cache into the container's read-only overlay filesystem at runtime.
 
 ---

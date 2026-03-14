@@ -243,4 +243,3 @@ services:
       # Expose the Slack Events API endpoint to the host.
       # Use ngrok / cloudflared in local dev to make this publicly reachable.
       - "3000:3000"
-
