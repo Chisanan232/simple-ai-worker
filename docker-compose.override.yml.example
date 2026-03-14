@@ -38,16 +38,24 @@ services:
     ports:
       - "8101:8101"
 
-  # Mount src/ read-only so the running container sees your latest Python
-  # changes without a full `docker compose build`.
+  # Mount src/ and config/ read-only so the running container sees your latest
+  # Python changes and agent config without a full `docker compose build`.
   # Restart the container after editing:
   #   docker compose restart ai-scheduler
   #   docker compose restart ai-slack-webhook
+  #
+  # NOTE: Docker Compose REPLACES list-type keys (volumes, ports, …) when
+  # merging override files — it does NOT append to the base list.  Therefore
+  # the config/agents.yaml mount defined in the x-app-common anchor in
+  # docker-compose.yml must be repeated here, alongside the src mount, so that
+  # both mounts are present in the final merged service definition.
   ai-scheduler:
     volumes:
       - ./src:/app/src:ro
+      - ./config/agents.yaml:/app/config/agents.yaml:ro
 
   ai-slack-webhook:
     volumes:
       - ./src:/app/src:ro
+      - ./config/agents.yaml:/app/config/agents.yaml:ro
 
