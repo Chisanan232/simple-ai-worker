@@ -94,8 +94,9 @@ class TestSlackMainRun:
 
     def test_create_bolt_app_called_with_correct_args(self) -> None:
         """main() must call create_bolt_app with settings, registry, and executor."""
-        import src.slack_main as slack_main_module
         from concurrent.futures import ThreadPoolExecutor
+
+        import src.slack_main as slack_main_module
 
         fake_settings = _make_fake_settings(max_concurrent=4)
         fake_registry = _make_fake_registry()
