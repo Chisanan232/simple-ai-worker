@@ -1,0 +1,245 @@
+# =============================================================================
+# docker-compose.yml — simple-ai-worker full stack
+# =============================================================================
+#
+# Services
+# --------
+#   MCP Servers (internal-only, no host port exposure in this file):
+#     mcp-github    — GitHub MCP server   (container port 8102)
+#     mcp-slack     — Slack MCP server    (container port 8103)
+#     mcp-jira      — JIRA MCP server     (container port 8100)  [sooperset/mcp-atlassian]
+#     mcp-clickup   — ClickUp MCP server  (container port 8101)
+#
+#   Applications (built from local Dockerfile):
+#     ai-scheduler      — APScheduler AI agent runner  (src/main.py)
+#     ai-slack-webhook  — Slack Events API Bolt server  (src/slack_main.py)
+#
+# Quick start
+# -----------
+#   cp .env.example .env && <fill in secrets>
+#   docker compose up -d
+#   docker compose logs -f ai-scheduler
+#   docker compose down
+#
+# Local dev (port exposure for MCP servers + src hot-reload):
+#   docker compose -f docker-compose.yml -f docker-compose.override.yml up
+#   — OR simply: docker compose up      (override is merged automatically)
+#
+# Prerequisites
+# -------------
+#   .env file at the project root — copy from .env.example and fill in values.
+#   config/agents.yaml             — copy from config/agents.example.yaml.
+#
+# =============================================================================
+
+name: simple-ai-worker
+
+# ---------------------------------------------------------------------------
+# Network
+# ---------------------------------------------------------------------------
+networks:
+  simple-ai-network:
+    driver: bridge
+
+# ---------------------------------------------------------------------------
+# Reusable YAML anchor for both application services
+# ---------------------------------------------------------------------------
+x-app-common: &app-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  # Load all secrets from .env — never hard-code credentials here.
+  env_file:
+    - .env
+  networks:
+    - simple-ai-network
+  # Mount agents.yaml read-only so the container always sees the latest config
+  # without requiring a rebuild.
+  volumes:
+    - ./config/agents.yaml:/app/config/agents.yaml:ro
+  restart: on-failure
+  # Wait for every MCP server to pass its health check before starting.
+  depends_on:
+    mcp-github:
+      condition: service_healthy
+    mcp-slack:
+      condition: service_healthy
+    mcp-jira:
+      # sooperset/mcp-atlassian validates Atlassian credentials at startup.
+      # With empty/placeholder ATLASSIAN_URL + ATLASSIAN_EMAIL + MCP_JIRA_TOKEN
+      # the HTTP server never binds port 8100, so the health check will always
+      # fail with "Connection refused".  Use service_started to avoid blocking
+      # the app services until real Jira credentials are configured in .env.
+      # Switch back to service_healthy once the three values above are populated.
+      condition: service_started
+    mcp-clickup:
+      condition: service_healthy
+
+# ---------------------------------------------------------------------------
+# Services
+# ---------------------------------------------------------------------------
+services:
+
+  # --------------------------------------------------------------------------
+  # MCP Server: GitHub
+  # https://github.com/github/github-mcp-server
+  # --------------------------------------------------------------------------
+  mcp-github:
+    image: ghcr.io/github/github-mcp-server:latest
+    container_name: mcp-github
+    # The image default Cmd is "stdio" — override to start the HTTP server
+    # on port 8102.  The PORT env var is NOT read by this binary; the port
+    # must be passed as a CLI flag.
+    command: ["http", "--port", "8102"]
+    networks:
+      - simple-ai-network
+    environment:
+      # The GitHub MCP server reads the PAT from this env var directly —
+      # it does NOT rely on an Authorization header.
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${MCP_GITHUB_TOKEN}
+    # Expose port inside the Docker network only.
+    # The override file maps 8102:8102 on the host for local dev inspection.
+    expose:
+      - "8102"
+    healthcheck:
+      # The GitHub MCP server image is distroless — no shell, wget, or curl.
+      # CMD-SHELL is unavailable; use the exec form with the server binary.
+      # `list-scopes` exits 0 immediately without network I/O or PAT validation,
+      # confirming the binary is healthy.  The HTTP port readiness is inferred
+      # from the start_period + the fact that the process is alive.
+      test: ["CMD", "/server/github-mcp-server", "list-scopes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # MCP Server: Slack
+  # https://github.com/Chisanan232/slack-mcp-server
+  # --------------------------------------------------------------------------
+  mcp-slack:
+    image: ghcr.io/chisanan232/slack-mcp-server:latest
+    container_name: mcp-slack
+    networks:
+      - simple-ai-network
+    environment:
+      # The Slack MCP server uses this token to call the Slack Web API.
+      # NOTE: this may be the same physical token as SLACK_BOT_TOKEN, but
+      # its role is different (outbound Slack API calls vs. Bolt event HMAC).
+      SLACK_BOT_TOKEN: ${MCP_SLACK_TOKEN}
+      # run-slack-mcp-server.sh reads MCP_PORT (not PORT) for the listen port.
+      MCP_PORT: "8103"
+      # Must be sse or streamable-http to bind a TCP port; default is stdio.
+      MCP_TRANSPORT: "sse"
+    expose:
+      - "8103"
+    healthcheck:
+      # Image has no wget/curl — use python3 (available at /app/.venv/bin/python3).
+      # /sse is the only unauthenticated path that returns HTTP 200 on this server.
+      # We open the connection and immediately close it (don't read the body) so
+      # the SSE stream doesn't block the health check indefinitely.
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; c=urllib.request.urlopen('http://localhost:8103/sse', timeout=3); c.close()\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # MCP Server: JIRA (Atlassian)
+  # https://github.com/sooperset/mcp-atlassian
+  # --------------------------------------------------------------------------
+  mcp-jira:
+    image: ghcr.io/sooperset/mcp-atlassian:latest
+    container_name: mcp-jira
+    # Pass CLI args to the mcp-atlassian entrypoint: SSE transport on port 8100.
+    command: ["--transport", "sse", "--port", "8100"]
+    networks:
+      - simple-ai-network
+    environment:
+      # sooperset/mcp-atlassian uses JIRA_* env vars for authentication.
+      JIRA_URL: ${ATLASSIAN_URL}
+      JIRA_USERNAME: ${ATLASSIAN_EMAIL}
+      JIRA_API_TOKEN: ${MCP_JIRA_TOKEN}
+    expose:
+      - "8100"
+    healthcheck:
+      # sooperset/mcp-atlassian exposes /healthz (not /health).
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:8100/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      # JIRA server starts slightly slower — allow extra time.
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # MCP Server: ClickUp
+  # https://github.com/Chisanan232/clickup-mcp-server
+  # --------------------------------------------------------------------------
+  mcp-clickup:
+    image: ghcr.io/chisanan232/clickup-mcp-server:latest
+    container_name: mcp-clickup
+    networks:
+      - simple-ai-network
+    environment:
+      CLICKUP_API_TOKEN: ${MCP_CLICKUP_TOKEN}
+      # Optional: scope all operations to a specific workspace/team.
+      # Set CLICKUP_TEAM_ID= in .env to leave it unset.
+      CLICKUP_TEAM_ID: ${CLICKUP_TEAM_ID:-}
+      # run-server.sh reads SERVER_PORT (not PORT) for the listen port.
+      SERVER_PORT: "8101"
+      # Must be sse or streamable-http to bind a TCP port; default is stdio.
+      MCP_TRANSPORT: "sse"
+    expose:
+      - "8101"
+    healthcheck:
+      # Image has no wget/curl — use python3 (available at /app/.venv/bin/python3).
+      # /health returns HTTP 200 {"status":"ok","server":"ClickUp MCP Server"}.
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8101/health', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # Application: AI Agent Scheduler
+  # Runs the APScheduler-based AI agent loop (src/main.py).
+  # No inbound ports — this service only makes outbound calls to MCP servers.
+  # --------------------------------------------------------------------------
+  ai-scheduler:
+    <<: *app-common
+    container_name: ai-scheduler
+    environment:
+      SERVICE_TYPE: worker
+      AGENT_CONFIG_PATH: config/agents.yaml
+      # Override MCP URLs to reach containers by service name instead of 127.0.0.1
+      MCP_JIRA_URL: http://mcp-jira:8100/mcp
+      MCP_CLICKUP_URL: http://mcp-clickup:8101/mcp
+      MCP_GITHUB_URL: http://mcp-github:8102/mcp
+      MCP_SLACK_URL: http://mcp-slack:8103/mcp
+
+  # --------------------------------------------------------------------------
+  # Application: Slack Events API Webhook Server
+  # Runs the Slack Bolt HTTP server (src/slack_main.py).
+  # Port 3000 is exposed to the host so Slack can deliver event payloads.
+  # In production, place a TLS-terminating proxy (Nginx/Caddy/ALB) in front.
+  # --------------------------------------------------------------------------
+  ai-slack-webhook:
+    <<: *app-common
+    container_name: ai-slack-webhook
+    environment:
+      SERVICE_TYPE: webhook
+      SLACK_PORT: "3000"
+      AGENT_CONFIG_PATH: config/agents.yaml
+      # Override MCP URLs to reach containers by service name instead of 127.0.0.1
+      MCP_JIRA_URL: http://mcp-jira:8100/mcp
+      MCP_CLICKUP_URL: http://mcp-clickup:8101/mcp
+      MCP_GITHUB_URL: http://mcp-github:8102/mcp
+      MCP_SLACK_URL: http://mcp-slack:8103/mcp
+    ports:
+      # Expose the Slack Events API endpoint to the host.
+      # Use ngrok / cloudflared in local dev to make this publicly reachable.
+      - "3000:3000"

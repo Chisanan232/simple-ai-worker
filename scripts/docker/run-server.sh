@@ -2,42 +2,58 @@
 set -e
 
 #
-# This script is a router that runs either the MCP server or Slack webhook server
-# based on the SERVICE_TYPE environment variable.
+# Entry-point router for the simple-ai-worker Docker image.
+#
+# Selects which application process to launch based on the SERVICE_TYPE
+# environment variable.  Called by the Dockerfile CMD.
 #
 # Environment variables:
 #
-# SERVICE_TYPE → Determines which service to run
-#    - "mcp": Runs the MCP server (run-slack-mcp-server.sh)
-#    - "webhook": Runs the Slack webhook server (run-slack-webhook-server.sh)
-#    - "integrated": Runs either server in integrated mode
+#   SERVICE_TYPE (required) — determines which process to start:
+#     "worker"             → AI agent scheduler           (src/main.py)
+#                            Entry-point: uv run simple-ai-worker
+#     "webhook"            → Slack Events API HTTP server  (src/slack_main.py)
+#                            Entry-point: uv run simple-ai-slack
+#     "integrated-webhook" → Alias for "webhook" (legacy compatibility)
 #
-# For all other environment variables, see the respective server scripts:
-# - run-slack-mcp-server.sh
-# - run-slack-webhook-server.sh
+# All other environment variables (API keys, ports, MCP URLs, etc.) are
+# passed through transparently — see .env.example for the full list.
 #
 # Example usage:
-# # Run MCP server
-# SERVICE_TYPE=mcp ./run-server.sh
 #
-## Run webhook server
-# SERVICE_TYPE=webhook ./run-server.sh
+#   # Run the AI agent scheduler
+#   SERVICE_TYPE=worker docker run simple-ai-worker
 #
-## Run integrated server via MCP entry point
-# SERVICE_TYPE=integrated ./run-server.sh
+#   # Run the Slack webhook server
+#   SERVICE_TYPE=webhook docker run -p 3000:3000 simple-ai-worker
 #
-## Run integrated server via webhook entry point
-# SERVICE_TYPE=integrated-webhook ./run-server.sh
+#   # docker compose (SERVICE_TYPE set in docker-compose.yml)
+#   docker compose up -d
 #
 
-# Default to MCP server if SERVICE_TYPE is not set
-SERVICE_TYPE=${SERVICE_TYPE:-mcp}
+# Default to worker if SERVICE_TYPE is not set
+SERVICE_TYPE=${SERVICE_TYPE:-worker}
 
 # Directory where this script is located
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Print informational message
 echo "SERVICE_TYPE is set to: ${SERVICE_TYPE}"
 
-# Determine which server to run based on SERVICE_TYPE
-# Your own docker script to run or set up something
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+case "${SERVICE_TYPE}" in
+  worker)
+    echo "[run-server.sh] Starting AI agent scheduler (simple-ai-worker) ..."
+    uv run simple-ai-worker
+    ;;
+  webhook | integrated-webhook)
+    echo "[run-server.sh] Starting Slack Events API webhook server (simple-ai-slack) ..."
+    uv run simple-ai-slack
+    ;;
+  *)
+    echo "[run-server.sh] ERROR: Unknown SERVICE_TYPE='${SERVICE_TYPE}'." >&2
+    echo "[run-server.sh]   Allowed values: worker | webhook | integrated-webhook" >&2
+    exit 1
+    ;;
+esac

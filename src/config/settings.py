@@ -118,6 +118,11 @@ class AppSettings(BaseSettings):
         # Extra keys in the environment / .env are silently ignored so that
         # third-party tools that inject their own env vars don't break startup.
         extra="ignore",
+        # Treat empty-string values (e.g. `MCP_JIRA_TOKEN=` in .env) as if
+        # the variable was not set at all, so Optional fields default to None
+        # rather than SecretStr('').  This keeps Optional fields semantically
+        # consistent: None means "not configured", never "empty string".
+        env_ignore_empty=True,
     )
 
     # ------------------------------------------------------------------
