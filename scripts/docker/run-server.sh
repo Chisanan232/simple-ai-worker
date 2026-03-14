@@ -45,15 +45,15 @@ echo "SERVICE_TYPE is set to: ${SERVICE_TYPE}"
 case "${SERVICE_TYPE}" in
   worker)
     echo "[run-server.sh] Starting AI agent scheduler (simple-ai-worker) ..."
-    uv run simple-ai-worker
+    exec simple-ai-worker
     ;;
   webhook | integrated-webhook)
     echo "[run-server.sh] Starting Slack Events API webhook server (simple-ai-slack) ..."
-    uv run simple-ai-slack
+    exec simple-ai-slack
     ;;
   *)
     echo "[run-server.sh] ERROR: Unknown SERVICE_TYPE='${SERVICE_TYPE}'." >&2
-    echo "[run-server.sh]   Allowed values: worker | webhook | integrated-webhook" >&2
+    echo "[run-server.sh]   Allowed values: worker  webhook  integrated-webhook" >&2
     exit 1
     ;;
 esac
