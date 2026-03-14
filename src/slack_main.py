@@ -15,7 +15,7 @@ Startup sequence:
     5. Build the :class:`~slack_bolt.async_app.AsyncApp` via
        :func:`~src.slack_app.app.create_bolt_app`.
     6. Start the built-in Bolt HTTP server:
-       ``await app.start(port=settings.SLACK_PORT)``.
+       ``app.start(port=settings.SLACK_PORT)``.
 
        - Binds to ``0.0.0.0:<SLACK_PORT>``.
        - ``POST /slack/events`` — Bolt verifies HMAC signatures, handles the
@@ -24,13 +24,27 @@ Startup sequence:
        - Blocks until ``SIGINT`` / ``SIGTERM``; Bolt handles graceful shutdown
          internally — no manual signal wiring is needed here.
 
+Design note on event-loop ownership
+------------------------------------
+``AsyncApp.start()`` is a **synchronous** blocking call.  Internally it
+delegates to ``aiohttp.web.run_app()`` which creates its *own* event loop
+via ``asyncio.new_event_loop()`` and calls ``loop.run_until_complete()``.
+
+Wrapping this in ``asyncio.run()`` would create a second, outer event loop
+while ``aiohttp`` tries to create yet another one — resulting in::
+
+    RuntimeError: Cannot run the event loop while another loop is running
+
+The fix is to perform all synchronous setup steps directly in ``main()`` and
+then call ``app.start()`` from the top-level synchronous context, letting
+``aiohttp`` own the single event loop for the lifetime of the process.
+
 This process runs **no scheduler code at all**.  APScheduler jobs are run by
 the separate ``simple-ai-worker`` process (entry point: ``src/main.py``).
 """
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -57,12 +71,22 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Async runner
+# Entry-point
 # ---------------------------------------------------------------------------
 
 
-async def _run() -> None:
-    """Async body of the Slack webhook process."""
+def main() -> None:
+    """Slack webhook entry-point — referenced by ``pyproject.toml`` ``[project.scripts]``.
+
+    Invoked via::
+
+        uv run simple-ai-slack
+
+    All initialisation is synchronous.  ``app.start()`` is a blocking
+    synchronous call that owns the aiohttp event loop for the life of the
+    process.  It must **not** be called from inside ``asyncio.run()`` — doing
+    so causes a nested-event-loop ``RuntimeError``.
+    """
     settings = get_settings()
     logger.info(
         "Settings loaded (slack_port=%d, max_dev_agents=%d).",
@@ -93,26 +117,9 @@ async def _run() -> None:
         "Starting Slack Events API HTTP server on port %d (POST /slack/events) …",
         settings.SLACK_PORT,
     )
-    # Blocks until SIGINT/SIGTERM.  Bolt handles:
-    #   - URL challenge verification (Slack → our server handshake)
-    #   - HMAC signature verification on every request
-    #   - Event dispatch to registered async handlers
-    await app.start(port=settings.SLACK_PORT)
-
-
-# ---------------------------------------------------------------------------
-# Entry-point
-# ---------------------------------------------------------------------------
-
-
-def main() -> None:
-    """Slack webhook entry-point — referenced by ``pyproject.toml`` ``[project.scripts]``.
-
-    Invoked via::
-
-        uv run simple-ai-slack
-    """
-    asyncio.run(_run())
+    # Blocking call — aiohttp.web.run_app() creates its own event loop.
+    # Handles SIGINT/SIGTERM and graceful shutdown internally.
+    app.start(port=settings.SLACK_PORT)
 
 
 if __name__ == "__main__":
