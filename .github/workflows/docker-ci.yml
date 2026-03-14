@@ -3,13 +3,12 @@ name: docker-ci
 on:
   push:
     branches:
-      - "<your_base_branch>"
+      - "master"
     paths:
 #     For GitHub Action
       - ".github/workflows/docker-ci.yml"
 #     For source code and test
-      - "<your_package_name>/**/*.py"
-      - "!**/__pkg_info__.py"
+      - "src/**/*.py"
 #     For docker configuration and shell script for running by Docker
       - "Dockerfile"
       - "scripts/docker/run-server.sh"
@@ -21,13 +20,12 @@ on:
   # or other checking, i.e., record the test report by CodeCov and check the code quality by SonarQube.
   pull_request:
     branches:
-      - "<your_base_branch>"
+      - "master"
     paths:
 #     For GitHub Action
       - ".github/workflows/docker-ci.yml"
 #     For source code and test
-      - "<your_package_name>/**/*.py"
-      - "!**/__pkg_info__.py"
+      - "src/**/*.py"
 #     For docker configuration and shell script for running by Docker
       - "Dockerfile"
       - "scripts/docker/run-server.sh"
