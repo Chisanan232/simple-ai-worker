@@ -21,6 +21,7 @@ def _make_registry(agent_ids: list[str] | None = None) -> MagicMock:
 def _make_settings(interval: int = 3600) -> MagicMock:
     s = MagicMock()
     s.SCHEDULER_INTERVAL_SECONDS = interval
+    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
     return s
 
 
