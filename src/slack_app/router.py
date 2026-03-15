@@ -1,18 +1,20 @@
 """
-Role router for the Slack Bolt event handlers (Phase 6).
+Role router for the Slack Bolt event handlers (Phase 6 + Phase 8a).
 
 Provides :func:`role_router`, which parses the incoming Slack message body for
-a ``[planner]`` or ``[dev lead]`` role tag and dispatches to the appropriate
-handler module.
+a ``[planner]``, ``[dev lead]``, or ``[dev]`` role tag and dispatches to the
+appropriate handler module.
 
 Routing rules
 -------------
+- Message contains ``[dev]``      → :func:`~src.slack_app.handlers.dev.dev_handler`
 - Message contains ``[planner]``  → :func:`~src.slack_app.handlers.planner.planner_handler`
 - Message contains ``[dev lead]`` → :func:`~src.slack_app.handlers.dev_lead.dev_lead_handler`
 - No recognised tag               → bot replies with a usage hint
 
-Both checks are case-insensitive and the match is done on the **full text**
-after stripping the ``<@BOTID>`` mention prefix.
+All checks are case-insensitive and the match is done on the **full text**
+after stripping the ``<@BOTID>`` mention prefix.  ``[dev]`` is checked first
+to avoid matching the ``[dev lead]`` tag (which also contains "dev").
 
 Design notes
 ------------
@@ -32,6 +34,7 @@ from typing import TYPE_CHECKING, Any, List
 if TYPE_CHECKING:
     from src.agents.registry import AgentRegistry
 
+from .handlers.dev import dev_handler
 from .handlers.dev_lead import dev_lead_handler
 from .handlers.planner import planner_handler
 
@@ -40,6 +43,9 @@ __all__: List[str] = ["role_router"]
 logger = logging.getLogger(__name__)
 
 # Regex patterns for role tag detection (case-insensitive).
+# NOTE: _DEV_TAG_RE must match "[dev]" but NOT "[dev lead]".
+# The pattern \[\s*dev\s*\] uses strict word boundary via the closing ].
+_DEV_TAG_RE: re.Pattern[str] = re.compile(r"\[\s*dev\s*\]", re.IGNORECASE)
 _PLANNER_TAG_RE: re.Pattern[str] = re.compile(r"\[planner\]", re.IGNORECASE)
 _DEV_LEAD_TAG_RE: re.Pattern[str] = re.compile(r"\[dev\s+lead\]", re.IGNORECASE)
 
@@ -48,6 +54,7 @@ _MENTION_RE: re.Pattern[str] = re.compile(r"<@[A-Z0-9]+>", re.IGNORECASE)
 
 _USAGE_HINT: str = (
     "👋 Hi! I'm *@ai-worker*. To chat with me, use one of these role tags:\n"
+    "• `[dev] <update>` — talk to the Dev Agent (use inside a Slack thread)\n"
     "• `[planner] <your product requirement>` — talk to the Planner Agent\n"
     "• `[dev lead] <your directive>` — talk to the Dev Lead Agent"
 )
@@ -86,7 +93,17 @@ def role_router(
         thread_ts,
     )
 
-    if _PLANNER_TAG_RE.search(cleaned_text):
+    if _DEV_TAG_RE.search(cleaned_text):
+        logger.info("role_router: [dev] tag detected — dispatching to dev_handler.")
+        dev_handler(
+            text=cleaned_text,
+            event=event,
+            say=say,
+            registry=registry,
+            executor=executor,
+        )
+
+    elif _PLANNER_TAG_RE.search(cleaned_text):
         logger.info("role_router: [planner] tag detected — dispatching to planner_handler.")
         planner_handler(
             text=cleaned_text,
