@@ -1,10 +1,10 @@
 """
-Unit tests for :mod:`src.ticket.models` (UNIT-TM-01 through UNIT-TM-12).
+Unit tests for :mod:`src.ticket.models` (UNIT-TM-01 through UNIT-TM-13).
 
 Covers:
-- TicketRecord construction, field access, immutability (frozen=True)
-- TicketRecord default values
-- PRRecord construction, mutability, and field defaults
+- TicketRecord construction, field access, immutability (frozen Pydantic model)
+- TicketRecord default values, equality, hashability
+- PRRecord construction, mutability, field defaults and validation
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from __future__ import annotations
 import time
 
 import pytest
+from pydantic import ValidationError
 
 from src.ticket.models import PRRecord, TicketRecord
 
@@ -55,9 +56,9 @@ class TestTicketRecordConstruction:
 
 class TestTicketRecordImmutability:
     def test_frozen_rejects_attribute_assignment(self) -> None:
-        """UNIT-TM-05: TicketRecord is frozen — assignment raises FrozenInstanceError."""
+        """UNIT-TM-05: TicketRecord is frozen — assignment raises ValidationError."""
         rec = TicketRecord(id="P-1", source="jira", title="T", url="")
-        with pytest.raises(Exception):  # FrozenInstanceError (dataclasses.FrozenInstanceError)
+        with pytest.raises(ValidationError):
             rec.id = "P-2"  # type: ignore[misc]
 
     def test_two_identical_records_are_equal(self) -> None:
@@ -112,7 +113,7 @@ class TestPRRecordConstruction:
         assert rec.is_merged is True
 
     def test_explicit_approval_count_and_is_merged(self) -> None:
-        """PRRecord accepts explicit approval_count and is_merged values."""
+        """UNIT-TM-13: PRRecord accepts explicit approval_count and is_merged values."""
         rec = PRRecord(
             ticket_id="T-2",
             pr_url="https://github.com/r/pull/2",
@@ -123,3 +124,12 @@ class TestPRRecordConstruction:
         assert rec.approval_count == 3
         assert rec.is_merged is True
 
+    def test_approval_count_rejects_negative(self) -> None:
+        """UNIT-TM-14: approval_count must be >= 0 — negative raises ValidationError."""
+        with pytest.raises(ValidationError):
+            PRRecord(
+                ticket_id="T-3",
+                pr_url="https://github.com/r/pull/3",
+                opened_at_utc=0.0,
+                approval_count=-1,
+            )
