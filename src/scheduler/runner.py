@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
     from src.agents.registry import AgentRegistry
     from src.config.settings import AppSettings
+    from src.ticket.registry import TrackerRegistry
     from src.ticket.workflow import WorkflowConfig
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,7 @@ class SchedulerRunner:
         settings: Optional["AppSettings"] = None,
         executor: Optional[ThreadPoolExecutor] = None,
         workflow: Optional["WorkflowConfig"] = None,
+        tracker_registry: Optional["TrackerRegistry"] = None,
     ) -> None:
         self._interval_seconds = interval_seconds
         self._timezone = timezone
@@ -100,6 +102,7 @@ class SchedulerRunner:
         self._settings = settings
         self._executor = executor
         self._workflow = workflow
+        self._tracker_registry = tracker_registry
         self._scheduler: BackgroundScheduler = BackgroundScheduler(
             timezone=self._timezone,
         )
@@ -193,6 +196,7 @@ class SchedulerRunner:
                     "settings": self._settings,
                     "executor": self._executor,
                     "workflow": self._workflow,
+                    "tracker_registry": self._tracker_registry,
                 },
                 trigger="interval",
                 seconds=self._interval_seconds,
