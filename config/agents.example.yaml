@@ -309,10 +309,20 @@ agents:
     mcps:
       - server: jira
         tool_filter:
-          - search_issues
-          - update_issue
-          - transition_issue
-      - clickup
+          - get_issue               # Feasibility: read existing story/epic
+          - search_issues           # Locate epics/stories by criteria
+          - create_issue            # Create sub-tasks during breakdown
+          - update_issue            # Update parent ticket with sub-task links
+          - link_issues             # Set dependency links between sub-tasks
+          - transition_issue        # Set OPEN/TO DO status on new sub-tasks
+          - add_comment             # Notify planner on parent ticket
+      - server: clickup
+        tool_filter:
+          - get_task                # Feasibility: read existing task
+          - search_tasks            # Locate tasks by criteria
+          - create_task             # Create sub-tasks during breakdown
+          - update_task             # Update parent + sub-task dependencies
+          - add_comment             # Notify planner on parent task
       - slack
     apps: []
     allow_delegation: false
@@ -355,6 +365,21 @@ agents:
       # Tickets in this state are silently skipped by the Dev Agent. (BR-3)
       skip_rejected:
         status_value: "REJECTED"
+
+      # ── Phase 9: Dev Lead planning workflow ──────────────────────────────
+      # Status set by the Dev Lead AI when creating sub-tasks from an epic.
+      # Signals "waiting for Dev Agent to produce a development plan".
+      # human_only: false → Dev Lead AI writes this when creating sub-tasks.
+      open_for_dev:
+        status_value: "OPEN"
+        human_only: false
+
+      # Status set by the HUMAN engineer after receiving the Dev Agent's plan.
+      # human_only: true → AI may READ but NEVER WRITE this state. (BR-10)
+      in_planning:
+        status_value: "IN PLANNING"
+        human_only: true
+      # ─────────────────────────────────────────────────────────────────────
 
       # The Dev Agent transitions to this state as its very FIRST action
       # when it begins working on a ticket (before writing any code).
