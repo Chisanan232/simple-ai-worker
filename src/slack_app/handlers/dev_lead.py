@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # Strip the role tag prefix from the message body.
 _DEV_LEAD_TAG_RE: re.Pattern[str] = re.compile(r"\[\s*dev\s+lead\s*\]", re.IGNORECASE)
 
-_THINKING_MSG: str = "⏳ On it! Analysing your request and reviewing the tickets …"
+_THINKING_MSG: str = "⏳ On it! Analysing your request, reviewing the architecture, and checking the tickets …"
 
 _DEV_LEAD_TASK_DESCRIPTION_TEMPLATE: str = """
 A human stakeholder has sent you the following directive via Slack:
@@ -51,18 +51,26 @@ The message may contain one of the following request types:
 
 **A. Epic/Story Breakdown Request**
    The human wants you to decompose a high-level JIRA/ClickUp epic or story
-   into well-scoped, independently executable sub-tasks.
+   into well-scoped, independently executable sub-tasks.  This applies when
+   the human has explicitly confirmed all open questions are answered and
+   asks you to proceed with the breakdown.
    Steps:
    1. Extract the ticket ID or description from the message.
-   2. Fetch the parent ticket via jira/search_issues or clickup/search_tasks.
+   2. Fetch the parent ticket via jira/get_issue or clickup/get_task.
    3. Decompose into sub-tasks: each sub-task must have:
       - A clear title and acceptance criteria.
-      - Explicit dependencies on other sub-tasks (if any).
+      - Explicit dependencies on other sub-tasks (if any) recorded in the
+        description and via jira/update_issue (link_issues) or
+        clickup/update_task (dependency field).
       - Implementation notes so a developer can begin immediately.
+      - Status set to the OPEN/TO DO state when creating via jira/create_issue
+        or clickup/create_task.
    4. Create the sub-tasks via jira/create_issue (or clickup/create_task).
    5. Update the parent ticket to link the sub-tasks (jira/update_issue or
       clickup/update_task).
-   6. Reply in the Slack thread via slack/reply_to_thread with a structured
+   6. Post a comment on the parent ticket summarising the breakdown via
+      jira/add_comment or clickup/add_comment (notify the planner).
+   7. Reply in the Slack thread via slack/reply_to_thread with a structured
       summary of the breakdown (sub-task keys, titles, dependencies).
 
 **B. Ticket Amendment / Refinement Request**
@@ -81,14 +89,47 @@ The message may contain one of the following request types:
    5. Reply in the Slack thread via slack/reply_to_thread with a confirmation
       of every change made (field names, old → new values where applicable).
 
+**C. Feasibility Assessment Request**
+   The human has described a new requirement or feature and wants you to assess
+   its feasibility, identify unclear areas, and ask clarifying questions before
+   any tickets are created.  This applies when the message describes a product
+   idea or requirement WITHOUT explicitly instructing you to break it down.
+   Steps:
+   1. Carefully read and understand the requirement.
+   2. If the message contains a JIRA ticket ID (e.g. PROJ-42), fetch the
+      story/epic via jira/get_issue to read the full description first.
+   3. Analyse:
+      - Technical feasibility and architectural considerations.
+      - Estimated scope (small / medium / large effort).
+      - Dependencies on existing systems or external services.
+      - Any ambiguous, incomplete, or potentially conflicting parts of the
+        requirement.
+   4. If you have clarifying questions (fuzzy areas detected), list them
+      clearly and post them in the Slack thread via slack/reply_to_thread.
+      Include your feasibility summary AND your numbered question list.
+      Do NOT create any tickets or sub-tasks yet.
+   5. If the requirement is unambiguous and complete enough to proceed, reply
+      with your feasibility summary and invite the planner to confirm they
+      want you to proceed with the full breakdown (Type A).
+
+IMPORTANT GUARDRAILS:
+  - In Type C mode: Do NOT create any task tickets or sub-tasks until the
+    human planner has explicitly confirmed all questions are answered.
+  - Do NOT set any ticket to the scan_for_work / ACCEPTED status — that
+    status is human-only (BR-1).
+  - When creating sub-tasks (Type A), always set their initial status to
+    the OPEN / TO DO state, NOT to ACCEPTED/IN PROGRESS.
+
 Determine which request type applies from the message content and execute the
 appropriate steps. Be thorough, structured, and always confirm your actions.
 """
 
 _DEV_LEAD_TASK_EXPECTED_OUTPUT: str = (
     "A structured reply posted in the Slack thread confirming all actions taken: "
-    "either a breakdown summary (sub-task keys, titles, dependencies) or an "
-    "amendment summary (ticket ID, fields updated, comments added)."
+    "either (A) a breakdown summary (sub-task keys, titles, dependencies, parent "
+    "ticket notified); "
+    "(B) an amendment summary (ticket ID, fields updated, comments added); or "
+    "(C) a feasibility assessment with clarifying questions or a go-ahead summary."
 )
 
 
