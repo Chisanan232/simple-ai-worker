@@ -1,5 +1,5 @@
 """
-Workflow operation abstraction (Phase 7, v5 design).
+Workflow operation abstraction (Phase 7 + Phase 9, v6 design).
 
 The core design principle of this module: **the AI layer only knows about
 operation names, never about status strings**.
@@ -7,8 +7,9 @@ operation names, never about status strings**.
 Classes
 -------
 WorkflowOperation
-    Enum of the six stable, semantic operations the Dev Agent performs.
-    These never change; only the *status strings* they map to change per team.
+    Enum of the eight stable, semantic operations the Dev / Dev Lead agents
+    perform.  These never change; only the *status strings* they map to
+    change per team.
 OperationConfig
     Configuration for a single operation (status string + human_only flag).
 WorkflowConfig
@@ -23,6 +24,15 @@ Business Rules Enforced
   (query) the status but never write (transition) to it.
 - **BR-3:** ``SKIP_REJECTED`` is used by callers to build the exclusion filter.
   :meth:`WorkflowConfig.matches` performs case-insensitive comparison.
+- **BR-10:** ``IN_PLANNING`` is ``human_only: true`` — only a human engineer
+  sets a task to this status after receiving the Dev Agent's plan for review.
+
+Backward Compatibility
+----------------------
+``WorkflowConfig.__init__`` accepts dicts with only the original six keys.
+The two new keys (``open_for_dev``, ``in_planning``) default to empty-string
+/ non-human-only when absent so that existing ``agents.yaml`` files continue
+to work without modification.
 """
 
 from __future__ import annotations
@@ -39,7 +49,7 @@ __all__: List[str] = [
 
 
 class WorkflowOperation(str, Enum):
-    """The named operations the Dev Agent performs in the workflow.
+    """The named operations the Dev / Dev Lead agents perform in the workflow.
 
     These are **stable, semantic operation names** that never change.
     What changes between teams is the *ticket status string* each operation
@@ -52,6 +62,15 @@ class WorkflowOperation(str, Enum):
         Always ``human_only: true``; AI queries this status but never writes it.
     SKIP_REJECTED
         **Read** — identify cancelled/rejected tickets to silently skip.
+    OPEN_FOR_DEV
+        **Write (Dev Lead)** — status set by the Dev Lead AI when creating
+        sub-tasks from a decomposed epic.  Signals "waiting for Dev Agent
+        to produce a development plan".  Example status string: ``"OPEN"``.
+    IN_PLANNING
+        **Read (Dev Agent) / Write (Human only)** — status set by the human
+        engineer after receiving the Dev Agent's development plan for review.
+        ``human_only: true`` — the AI may query this status but must never
+        transition a ticket to it.  Example: ``"IN PLANNING"``.
     START_DEVELOPMENT
         **Write** — transition when the Dev Agent starts coding.
     OPEN_FOR_REVIEW
@@ -64,6 +83,8 @@ class WorkflowOperation(str, Enum):
 
     SCAN_FOR_WORK = "scan_for_work"
     SKIP_REJECTED = "skip_rejected"
+    OPEN_FOR_DEV = "open_for_dev"
+    IN_PLANNING = "in_planning"
     START_DEVELOPMENT = "start_development"
     OPEN_FOR_REVIEW = "open_for_review"
     MARK_COMPLETE = "mark_complete"
@@ -128,20 +149,43 @@ class WorkflowConfig:
     >>> cfg.status_for_write(WorkflowOperation.SCAN_FOR_WORK)  # raises PermissionError
     """
 
+    # Original six operations — must be present in every config dict.
+    _REQUIRED_OPS = frozenset({
+        WorkflowOperation.SCAN_FOR_WORK,
+        WorkflowOperation.SKIP_REJECTED,
+        WorkflowOperation.START_DEVELOPMENT,
+        WorkflowOperation.OPEN_FOR_REVIEW,
+        WorkflowOperation.MARK_COMPLETE,
+        WorkflowOperation.UPDATE_WITH_CONTEXT,
+    })
+
+    # Phase-9 additions — optional; default to empty / non-human-only so that
+    # existing agents.yaml files that only define the original six keys continue
+    # to work without modification.
+    _OPTIONAL_OP_DEFAULTS: Dict[str, OperationConfig] = {
+        WorkflowOperation.OPEN_FOR_DEV.value: OperationConfig(status_value="", human_only=False),
+        WorkflowOperation.IN_PLANNING.value: OperationConfig(status_value="", human_only=True),
+    }
+
     def __init__(self, config: Dict[str, dict]) -> None:
         self._ops: Dict[WorkflowOperation, OperationConfig] = {}
         for op in WorkflowOperation:
             raw = config.get(op.value)
             if raw is None:
-                raise ValueError(
-                    f"Missing workflow operation config for '{op.value}'. "
-                    "All six operations must be defined in the 'workflow:' YAML block. "
-                    f"Available keys: {sorted(config.keys())}."
+                if op in self._REQUIRED_OPS:
+                    raise ValueError(
+                        f"Missing workflow operation config for '{op.value}'. "
+                        "The original six operations must be defined in the "
+                        "'workflow:' YAML block. "
+                        f"Available keys: {sorted(config.keys())}."
+                    )
+                # Optional new op — use its default OperationConfig.
+                self._ops[op] = self._OPTIONAL_OP_DEFAULTS[op.value]
+            else:
+                self._ops[op] = OperationConfig(
+                    status_value=raw.get("status_value", ""),
+                    human_only=bool(raw.get("human_only", False)),
                 )
-            self._ops[op] = OperationConfig(
-                status_value=raw.get("status_value", ""),
-                human_only=bool(raw.get("human_only", False)),
-            )
 
     # ------------------------------------------------------------------
     # Public read API
