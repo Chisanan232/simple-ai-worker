@@ -240,12 +240,19 @@ class WorkflowOperationConfig(BaseModel):
 class WorkflowConfigModel(BaseModel):
     """Pydantic model for the ``workflow:`` block inside an agent's YAML entry.
 
-    All six operations must be present.  Values are validated at load time
-    so that a missing or misspelled key raises a clear error immediately.
+    The original six operations are required.  The two Phase-9 additions
+    (``open_for_dev``, ``in_planning``) are optional and default to empty
+    status values so that existing ``agents.yaml`` files remain valid without
+    modification.
 
     Attributes:
         scan_for_work:       Status that signals a ticket is ready to develop.
         skip_rejected:       Status that marks a ticket as cancelled/rejected.
+        open_for_dev:        Status set by Dev Lead when creating sub-tasks
+                             (e.g. ``"OPEN"``).  Optional; defaults to empty.
+        in_planning:         Status set by human after receiving the Dev Agent
+                             plan (e.g. ``"IN PLANNING"``).  human_only=True.
+                             Optional; defaults to empty.
         start_development:   Status the agent writes when it begins coding.
         open_for_review:     Status written when the agent opens a GitHub PR.
         mark_complete:       Status written when the PR is merged.
@@ -254,6 +261,12 @@ class WorkflowConfigModel(BaseModel):
 
     scan_for_work: WorkflowOperationConfig
     skip_rejected: WorkflowOperationConfig
+    open_for_dev: WorkflowOperationConfig = Field(
+        default_factory=lambda: WorkflowOperationConfig(status_value="", human_only=False)
+    )
+    in_planning: WorkflowOperationConfig = Field(
+        default_factory=lambda: WorkflowOperationConfig(status_value="", human_only=True)
+    )
     start_development: WorkflowOperationConfig
     open_for_review: WorkflowOperationConfig
     mark_complete: WorkflowOperationConfig
@@ -277,6 +290,14 @@ class WorkflowConfigModel(BaseModel):
                 "skip_rejected": {
                     "status_value": self.skip_rejected.status_value,
                     "human_only": self.skip_rejected.human_only,
+                },
+                "open_for_dev": {
+                    "status_value": self.open_for_dev.status_value,
+                    "human_only": self.open_for_dev.human_only,
+                },
+                "in_planning": {
+                    "status_value": self.in_planning.status_value,
+                    "human_only": self.in_planning.human_only,
                 },
                 "start_development": {
                     "status_value": self.start_development.status_value,

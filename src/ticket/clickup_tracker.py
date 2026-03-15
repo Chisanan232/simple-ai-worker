@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any, List
 
 from crewai import Task
 
-from .models import TicketRecord
+from .models import TicketComment, TicketRecord
 from .rest_client import ClickUpRestClient
 from .tracker import TicketTracker
 from .workflow import WorkflowConfig, WorkflowOperation
@@ -141,6 +141,39 @@ class ClickUpTracker(TicketTracker):
         expected_output = f"Confirmation that a comment was posted to '{ticket_id}'."
         self._run_crew_task(description, expected_output)
         logger.info("ClickUpTracker: added comment to %s.", ticket_id)
+
+    def fetch_ticket_comments(self, ticket_id: str) -> List[TicketComment]:
+        """Return all comments on ClickUp task *ticket_id*, oldest-first.
+
+        Calls the ClickUp REST API directly via
+        :meth:`~src.ticket.rest_client.ClickUpRestClient.get_task_comments`.
+        No LLM crew is created — comment fetching is a deterministic read.
+
+        Args:
+            ticket_id: The ClickUp task ID.
+
+        Returns:
+            Sorted list of :class:`~src.ticket.models.TicketComment` objects.
+
+        Raises:
+            :class:`~src.ticket.rest_client.TicketFetchError`: On API error.
+        """
+        raw_comments = self._rest_client.get_task_comments(ticket_id)
+        comments: List[TicketComment] = []
+        for c in raw_comments:
+            comment_id = str(c.get("id", "")).strip()
+            if not comment_id:
+                continue
+            comments.append(
+                TicketComment(
+                    id=comment_id,
+                    author=str(c.get("author", "")),
+                    body=str(c.get("body", "")),
+                    created_at=float(c.get("created_at", 0.0)),
+                    source="clickup",
+                )
+            )
+        return sorted(comments, key=lambda x: x.created_at)
 
     # ------------------------------------------------------------------
     # Internal helpers

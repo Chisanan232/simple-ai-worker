@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, List, Optional
 
 from crewai import Task
 
-from .models import TicketRecord
+from .models import TicketComment, TicketRecord
 from .rest_client import JiraRestClient
 from .tracker import TicketTracker
 from .workflow import WorkflowConfig, WorkflowOperation
@@ -147,6 +147,39 @@ class JiraTracker(TicketTracker):
         expected_output = f"Confirmation that a comment was posted to '{ticket_id}'."
         self._run_crew_task(description, expected_output)
         logger.info("JiraTracker: added comment to %s.", ticket_id)
+
+    def fetch_ticket_comments(self, ticket_id: str) -> List[TicketComment]:
+        """Return all comments on JIRA issue *ticket_id*, oldest-first.
+
+        Calls the JIRA REST API directly via
+        :meth:`~src.ticket.rest_client.JiraRestClient.get_issue_comments`.
+        No LLM crew is created — comment fetching is a deterministic read.
+
+        Args:
+            ticket_id: The JIRA issue key (e.g. ``"PROJ-42"``).
+
+        Returns:
+            Sorted list of :class:`~src.ticket.models.TicketComment` objects.
+
+        Raises:
+            :class:`~src.ticket.rest_client.TicketFetchError`: On API error.
+        """
+        raw_comments = self._rest_client.get_issue_comments(ticket_id)
+        comments: List[TicketComment] = []
+        for c in raw_comments:
+            comment_id = str(c.get("id", "")).strip()
+            if not comment_id:
+                continue
+            comments.append(
+                TicketComment(
+                    id=comment_id,
+                    author=str(c.get("author", "")),
+                    body=str(c.get("body", "")),
+                    created_at=float(c.get("created_at", 0.0)),
+                    source="jira",
+                )
+            )
+        return sorted(comments, key=lambda x: x.created_at)
 
     # ------------------------------------------------------------------
     # Internal helpers

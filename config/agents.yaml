@@ -31,7 +31,8 @@ mcp_servers:
 
   # ---------------------------------------------------------------------------
   # JIRA MCP Server
-  # Provides: create_issue, search_issues, update_issue, transition_issue
+  # Provides tools used by planner, dev_lead, and dev_agent.
+  # Per-agent tool subsets are controlled by per-agent mcps override mappings.
   # ---------------------------------------------------------------------------
   jira:
     type: http
@@ -40,14 +41,17 @@ mcp_servers:
       Authorization: "Bearer ${MCP_JIRA_TOKEN}"
     tool_filter:
       - create_issue
+      - get_issue
       - search_issues
       - update_issue
+      - link_issues
       - transition_issue
+      - add_comment
     cache_tools_list: true
 
   # ---------------------------------------------------------------------------
   # ClickUp MCP Server
-  # Provides: create_task, search_tasks, update_task
+  # Provides tools used by planner, dev_lead, and dev_agent.
   # ---------------------------------------------------------------------------
   clickup:
     type: http
@@ -56,8 +60,10 @@ mcp_servers:
       Authorization: "Bearer ${MCP_CLICKUP_TOKEN}"
     tool_filter:
       - create_task
+      - get_task
       - search_tasks
       - update_task
+      - add_comment
     cache_tools_list: true
 
   # ---------------------------------------------------------------------------
@@ -134,21 +140,38 @@ agents:
   # Dev Lead Agent
   # Triggered by: @ai-worker [dev lead] <message> via Slack Bolt (primary)
   #               or dev_lead_listener_job (APScheduler fallback)
+  #
+  # Three request modes handled by the Slack handler:
+  #   A. Epic/Story Breakdown  — decompose a parent ticket into sub-tasks
+  #                              with dependency links; notify planner.
+  #   B. Ticket Amendment      — update fields, status, or add context to an
+  #                              existing ticket.
+  #   C. Feasibility Assessment — assess a new requirement, identify ambiguous
+  #                              areas, ask clarifying questions in Slack
+  #                              BEFORE creating any tickets (BR-7).
   # ---------------------------------------------------------------------------
   - id: dev_lead
     role: Technical Dev Lead
     goal: >
-      Break down product epics into well-scoped, dependency-annotated sub-tasks
-      that development agents can execute independently. Update existing tickets
-      with implementation directives when instructed by a human.
+      Assess the feasibility of product requirements, ask targeted clarifying
+      questions when a requirement is ambiguous, and — once all questions are
+      answered — break down confirmed epics into well-scoped, dependency-annotated
+      sub-tasks that development agents can execute independently. Update existing
+      tickets with implementation directives when instructed by a human.
     backstory: >
       You are a senior software engineer and technical lead with deep expertise in
-      system design, task decomposition, and agile estimation. You receive product
-      epics from the Planner and decompose them into precise sub-tasks with clear
-      acceptance criteria, explicit inter-task dependencies, and implementation
-      notes. You communicate in a structured, technical tone and always annotate
-      your sub-tasks with enough context for a developer to begin work without
-      further clarification.
+      system design, task decomposition, and agile estimation. When a human planner
+      brings you a new requirement you first assess its technical feasibility,
+      estimate scope, and identify any unclear or conflicting parts. You ask
+      focused clarifying questions in the Slack thread before creating any tickets
+      — you never decompose a requirement that still has open ambiguities (BR-7).
+      Once the planner confirms all questions are answered you decompose the epic
+      into precise sub-tasks with clear acceptance criteria, explicit inter-task
+      dependency links, and implementation notes detailed enough for a developer
+      to begin work immediately. After creating sub-tasks you post a summary
+      comment on the parent ticket to notify the planner, then reply in the Slack
+      thread with the full breakdown. You communicate in a structured, technical
+      tone and never make assumptions about scope or architecture.
     llm:
       provider: openai
       model: gpt-4o
@@ -158,30 +181,62 @@ agents:
         top_p: 1.0
         timeout: 120
     mcps:
-      - jira
-      - clickup
-      - slack
+      # Jira tools scoped to dev_lead responsibilities:
+      #   - Feasibility (C): get_issue, search_issues
+      #   - Breakdown   (A): create_issue, update_issue, link_issues,
+      #                      transition_issue (set OPEN), add_comment (notify planner)
+      #   - Amendment   (B): get_issue, update_issue, transition_issue, add_comment
+      - server: jira
+        tool_filter:
+          - get_issue               # Feasibility/Amendment: read existing story/epic
+          - search_issues           # Locate epics/stories by criteria
+          - create_issue            # Breakdown: create sub-tasks
+          - update_issue            # Breakdown: link sub-tasks to parent; Amendment: update fields
+          - link_issues             # Breakdown: set dependency links between sub-tasks
+          - transition_issue        # Breakdown: set OPEN/TO DO status on new sub-tasks
+          - add_comment             # Breakdown: notify planner on parent; Amendment: add context
+      # ClickUp tools scoped to dev_lead responsibilities:
+      - server: clickup
+        tool_filter:
+          - get_task                # Feasibility/Amendment: read existing task
+          - search_tasks            # Locate tasks by criteria
+          - create_task             # Breakdown: create sub-tasks
+          - update_task             # Breakdown: link/dependency; Amendment: update fields
+          - add_comment             # Breakdown: notify planner; Amendment: add context
+      # Slack: reply in thread (feasibility questions, breakdown summary, amendments)
+      - server: slack
+        tool_filter:
+          - reply_to_thread         # Post clarifying questions and breakdown summary
+          - get_messages            # Read thread history for context during discussion
+          - send_message            # Notify planner channel after breakdown complete
     apps: []
     allow_delegation: false
     verbose: false
 
   # ---------------------------------------------------------------------------
   # Dev Agent
-  # Triggered by: scan_and_dispatch_job (APScheduler pull model)
+  # Triggered by: scan_and_dispatch_job     (APScheduler — ACCEPTED tickets)
+  #               plan_and_notify_job       (APScheduler — OPEN / IN PLANNING tickets)
+  #               @ai-worker [dev] <thread> (Slack Bolt — thread summary S3a)
   # ---------------------------------------------------------------------------
   - id: dev_agent
     role: Software Developer
     goal: >
       Scan for ready development tickets with no open dependencies, self-assign
       and implement them, open a GitHub pull request, and update the ticket
-      status for human review.
+      status for human review. Also produce detailed development plans for newly
+      created sub-tasks and revise plans based on human feedback before coding.
     backstory: >
       You are a skilled software developer who thrives in an autonomous,
       pull-based workflow. You proactively scan for available tasks, implement
       them with clean, well-tested code, open pull requests with descriptive
       summaries, and keep your ticket status up to date. You never start a task
       that has unresolved dependencies and you always notify the team when your
-      work is ready for review.
+      work is ready for review. When a new sub-task arrives in OPEN status you
+      first design a thorough development plan, post it as a Markdown comment on
+      the ticket, and wait for human approval before writing any code. You
+      incorporate reviewer feedback into revised plans until the ticket is moved
+      to ACCEPTED by the human engineer.
     llm:
       provider: openai
       model: gpt-4o
@@ -211,6 +266,21 @@ agents:
       skip_rejected:
         status_value: "REJECTED"
 
+      # ── Phase 9: Dev Lead planning workflow ──────────────────────────────
+      # Status set by the Dev Lead AI when creating sub-tasks from an epic.
+      # Signals "waiting for Dev Agent to produce a development plan".
+      # human_only: false → Dev Lead AI writes this when creating sub-tasks.
+      open_for_dev:
+        status_value: "OPEN"
+        human_only: false
+
+      # Status set by the HUMAN engineer after receiving the Dev Agent's plan.
+      # human_only: true → AI may READ but NEVER WRITE this state. (BR-10)
+      in_planning:
+        status_value: "IN PLANNING"
+        human_only: true
+      # ─────────────────────────────────────────────────────────────────────
+
       # The Dev Agent transitions to this state as its very FIRST action
       # when it begins working on a ticket (before writing any code).
       start_development:
@@ -232,16 +302,17 @@ agents:
     mcps:
       - server: jira
         tool_filter:
-          - search_issues           # SCAN_FOR_WORK — find ready tickets
-          - get_issue               # fetch full ticket details
+          - search_issues           # SCAN_FOR_WORK — find ACCEPTED tickets (scan_and_dispatch)
+                                    # OPEN_FOR_DEV / IN_PLANNING — find planning tickets (plan_and_notify)
+          - get_issue               # fetch full ticket details (all modes)
           - transition_issue        # START_DEVELOPMENT, OPEN_FOR_REVIEW, MARK_COMPLETE
-          - add_comment             # UPDATE_WITH_CONTEXT — post Slack thread summary (S3a)
+          - add_comment             # UPDATE_WITH_CONTEXT (S3a); post plan + notify (planning mode)
       - server: clickup
         tool_filter:
-          - search_tasks            # SCAN_FOR_WORK
+          - search_tasks            # SCAN_FOR_WORK / OPEN_FOR_DEV / IN_PLANNING
           - get_task                # fetch full task details
           - update_task             # START_DEVELOPMENT, OPEN_FOR_REVIEW, MARK_COMPLETE
-          - add_comment             # UPDATE_WITH_CONTEXT — post Slack thread summary (S3a)
+          - add_comment             # UPDATE_WITH_CONTEXT (S3a); post plan + notify (planning mode)
       - server: github
         tool_filter:
           - create_pull_request         # OPEN_FOR_REVIEW — open PR after implementation
@@ -254,7 +325,7 @@ agents:
           - search_repositories         # locate the correct repo for PR creation
       - server: slack
         tool_filter:
-          - send_message            # post notifications (PR opened, merged)
+          - send_message            # post notifications (PR opened, merged, plan ready)
           - reply_to_thread         # S3a confirmation reply; S3b ask-for-ticket-id
           - get_messages            # fetch full Slack thread history (S3a)
           - get_thread_permalink    # construct permalink for ticket comment

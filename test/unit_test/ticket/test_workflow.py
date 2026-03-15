@@ -65,16 +65,20 @@ def _make_cfg(overrides: dict | None = None) -> WorkflowConfig:
 
 class TestWorkflowOperationEnum:
     def test_all_six_operations_exist(self) -> None:
-        """UNIT-WF-01: All six expected operations are members of the enum."""
+        """UNIT-WF-01: All expected operations are members of the enum (now eight with Phase 9)."""
         names = {op.value for op in WorkflowOperation}
-        assert names == {
+        # Original six operations must always be present.
+        assert {
             "scan_for_work",
             "skip_rejected",
             "start_development",
             "open_for_review",
             "mark_complete",
             "update_with_context",
-        }
+        }.issubset(names)
+        # Phase-9 additions must also be present.
+        assert "open_for_dev" in names
+        assert "in_planning" in names
 
     def test_enum_values_are_strings(self) -> None:
         """UNIT-WF-02: All operation values are plain strings (WorkflowOperation is str enum)."""
@@ -308,10 +312,16 @@ class TestIsHumanOnly:
         assert cfg.is_human_only(WorkflowOperation.SCAN_FOR_WORK) is True
 
     def test_other_operations_are_not_human_only(self) -> None:
-        """UNIT-WF-33: All write operations return False for is_human_only (Team A)."""
+        """UNIT-WF-33: Write operations return False for is_human_only (Team A).
+
+        SCAN_FOR_WORK is human_only=True by config.
+        IN_PLANNING is human_only=True by default (Phase-9 addition).
+        All other operations must not be human_only.
+        """
         cfg = WorkflowConfig(_TEAM_A)
+        human_only_ops = {WorkflowOperation.SCAN_FOR_WORK, WorkflowOperation.IN_PLANNING}
         for op in WorkflowOperation:
-            if op is not WorkflowOperation.SCAN_FOR_WORK:
+            if op not in human_only_ops:
                 assert cfg.is_human_only(op) is False, f"Expected {op.value} to not be human_only"
 
 

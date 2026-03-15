@@ -17,7 +17,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List
 
-from .models import TicketRecord
+from .models import TicketComment, TicketRecord
 from .workflow import WorkflowConfig, WorkflowOperation
 
 __all__: List[str] = ["TicketTracker"]
@@ -98,5 +98,30 @@ class TicketTracker(ABC):
         Args:
             ticket_id: The ticket identifier.
             comment:   The comment body (Markdown-formatted).
+        """
+        ...
+
+    @abstractmethod
+    def fetch_ticket_comments(self, ticket_id: str) -> List[TicketComment]:
+        """Return all comments posted on *ticket_id*, ordered oldest-first.
+
+        Used by :func:`~src.scheduler.jobs.plan_and_notify.plan_and_notify_job`
+        to detect new human feedback on ``IN PLANNING`` tickets and trigger the
+        plan-revision loop.
+
+        Calls the tracker REST API directly (no LLM crew) — comment fetching
+        is a deterministic read that does not require AI reasoning.
+
+        Args:
+            ticket_id: The ticket identifier (e.g. ``"PROJ-42"`` or a
+                ClickUp task ID).
+
+        Returns:
+            List of :class:`~src.ticket.models.TicketComment` objects sorted
+            by ``created_at`` ascending.  Returns an empty list if the ticket
+            has no comments or cannot be reached.
+
+        Raises:
+            :class:`~src.ticket.rest_client.TicketFetchError`: On API error.
         """
         ...

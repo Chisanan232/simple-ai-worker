@@ -43,6 +43,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from .jobs.dev_lead_listener import dev_lead_listener_job
 from .jobs.hello_world import hello_world_job
+from .jobs.plan_and_notify import plan_and_notify_job
 from .jobs.planner_listener import planner_listener_job
 from .jobs.pr_merge_watcher import pr_merge_watcher_job
 from .jobs.pr_review_comment_handler import pr_review_comment_handler_job
@@ -234,6 +235,24 @@ class SchedulerRunner:
             )
             logger.debug("Registered job: %s (id=%s).", dev_lead_job.name, dev_lead_job.id)
 
+            # Phase 9 — Dev Agent planning loop (OPEN_FOR_DEV → plan → IN_PLANNING → revise).
+            plan_notify_job: "Job" = self._scheduler.add_job(
+                func=plan_and_notify_job,
+                kwargs={
+                    "registry": self._registry,
+                    "settings": self._settings,
+                    "executor": self._executor,
+                    "workflow": self._workflow,
+                    "tracker_registry": self._tracker_registry,
+                },
+                trigger="interval",
+                seconds=self._interval_seconds,
+                id="plan_and_notify",
+                name="Dev Agent Plan-and-Notify (planning loop)",
+                replace_existing=True,
+            )
+            logger.debug("Registered job: %s (id=%s).", plan_notify_job.name, plan_notify_job.id)
+
             # Phase 8c — PR auto-merge watcher (BR-2: approved PRs only).
             pr_merge_interval: int = 60
             merge_watcher_job: "Job" = self._scheduler.add_job(
@@ -274,9 +293,9 @@ class SchedulerRunner:
             logger.debug("Registered job: %s (id=%s).", review_comment_job.name, review_comment_job.id)
 
             logger.info(
-                "Phase-6/8 scheduler jobs registered: scan_and_dispatch, "
-                "planner_listener, dev_lead_listener, pr_merge_watcher, "
-                "pr_review_comment_handler."
+                "Phase-6/8/9 scheduler jobs registered: scan_and_dispatch, "
+                "planner_listener, dev_lead_listener, plan_and_notify, "
+                "pr_merge_watcher, pr_review_comment_handler."
             )
         else:
             logger.info(

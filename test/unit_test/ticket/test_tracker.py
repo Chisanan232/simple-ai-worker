@@ -5,7 +5,7 @@ Covers:
 - TicketTracker ABC cannot be instantiated directly
 - Concrete subclass satisfying the ABC compiles and works
 - __init__ stores workflow on self._workflow
-- fetch_tickets_for_operation, transition, add_comment are abstract
+- fetch_tickets_for_operation, transition, add_comment, fetch_ticket_comments are abstract
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import List
 
 import pytest
 
-from src.ticket.models import TicketRecord
+from src.ticket.models import TicketComment, TicketRecord
 from src.ticket.tracker import TicketTracker
 from src.ticket.workflow import WorkflowConfig, WorkflowOperation
 
@@ -34,6 +34,9 @@ class _ConcreteTracker(TicketTracker):
 
     def add_comment(self, ticket_id: str, comment: str) -> None:
         pass
+
+    def fetch_ticket_comments(self, ticket_id: str) -> List[TicketComment]:
+        return []
 
 
 _WORKFLOW_CFG = {
@@ -64,6 +67,27 @@ class TestTicketTrackerABC:
         tracker = _ConcreteTracker(workflow=workflow)
         assert tracker._workflow is workflow
 
+    def test_concrete_fetch_returns_empty_list(self) -> None:
+        """UNIT-TR-05: fetch_tickets_for_operation returns empty list in minimal impl."""
+        workflow = WorkflowConfig(_WORKFLOW_CFG)
+        tracker = _ConcreteTracker(workflow=workflow)
+        result = tracker.fetch_tickets_for_operation(WorkflowOperation.SCAN_FOR_WORK)
+        assert result == []
+
+    def test_concrete_fetch_comments_returns_empty_list(self) -> None:
+        """UNIT-TR-06: fetch_ticket_comments returns empty list in minimal impl."""
+        workflow = WorkflowConfig(_WORKFLOW_CFG)
+        tracker = _ConcreteTracker(workflow=workflow)
+        result = tracker.fetch_ticket_comments("PROJ-1")
+        assert result == []
+
+    def test_concrete_transition_and_add_comment_callable(self) -> None:
+        """UNIT-TR-07: transition() and add_comment() can be called without error."""
+        workflow = WorkflowConfig(_WORKFLOW_CFG)
+        tracker = _ConcreteTracker(workflow=workflow)
+        tracker.transition("PROJ-1", WorkflowOperation.START_DEVELOPMENT)
+        tracker.add_comment("PROJ-1", "test comment")
+
     def test_subclass_missing_one_abstract_method_cannot_instantiate(self) -> None:
         """UNIT-TR-04: Subclass that omits any abstract method cannot be instantiated."""
 
@@ -74,7 +98,7 @@ class TestTicketTrackerABC:
             def transition(self, ticket_id: str, operation: WorkflowOperation) -> None:
                 pass
 
-            # add_comment intentionally omitted
+            # add_comment and fetch_ticket_comments intentionally omitted
 
         with pytest.raises(TypeError):
             _Incomplete(workflow=WorkflowConfig(_WORKFLOW_CFG))  # type: ignore[abstract]
