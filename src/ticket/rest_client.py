@@ -223,6 +223,76 @@ class ClickUpRestClient:
             "status": ClickUpRestClient._extract_status(task),
         }
 
+    def get_task_comments(self, task_id: str) -> List[dict]:
+        """Return all comments on ClickUp task *task_id*, ordered oldest-first.
+
+        Calls ``GET /api/v2/task/{task_id}/comment``.
+
+        Args:
+            task_id: The ClickUp task ID.
+
+        Returns:
+            A list of normalised dicts with keys
+            ``id``, ``author``, ``body``, ``created_at``.
+
+        Raises:
+            TicketFetchError: On any non-2xx response or network error.
+        """
+        url = f"{self._BASE_URL}/task/{task_id}/comment"
+        headers = {
+            "Authorization": self._api_token,
+            "Content-Type": "application/json",
+        }
+        logger.debug("ClickUpRestClient: GET comments for task %s", task_id)
+        try:
+            with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
+                response = client.get(url, headers=headers)
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise TicketFetchError(
+                f"ClickUp API returned {exc.response.status_code} fetching comments "
+                f"for task '{task_id}': {exc.response.text[:200]}",
+                source="clickup",
+                status_code=exc.response.status_code,
+            ) from exc
+        except httpx.TransportError as exc:
+            raise TicketFetchError(
+                f"ClickUp API network error fetching comments for task '{task_id}': {exc}",
+                source="clickup",
+            ) from exc
+
+        data = response.json()
+        raw_comments: list = data.get("comments", [])
+        results: List[dict] = []
+        for c in raw_comments:
+            user = c.get("user", {})
+            author = user.get("username", "") if isinstance(user, dict) else str(user)
+            # ClickUp returns date as milliseconds epoch string
+            date_str = str(c.get("date", "0"))
+            try:
+                created_at = float(date_str) / 1000.0
+            except (ValueError, TypeError):
+                created_at = 0.0
+            comment_text = c.get("comment_text", "")
+            if not comment_text:
+                # Rich comments store text in comment[].text
+                parts = c.get("comment", [])
+                comment_text = " ".join(
+                    p.get("text", "") for p in parts if isinstance(p, dict)
+                )
+            results.append({
+                "id": str(c.get("id", "")),
+                "author": author,
+                "body": comment_text,
+                "created_at": created_at,
+            })
+        logger.info(
+            "ClickUpRestClient: fetched %d comment(s) for task '%s'.",
+            len(results),
+            task_id,
+        )
+        return results
+
 
 # ---------------------------------------------------------------------------
 # JIRA REST Client
@@ -389,3 +459,106 @@ class JiraRestClient:
             "url": f"{base_url}/browse/{key}" if key else "",
             "status": raw_status,
         }
+
+    def get_issue_comments(self, ticket_id: str) -> List[dict]:
+        """Return all comments on JIRA issue *ticket_id*, ordered oldest-first.
+
+        Calls ``GET /rest/api/3/issue/{ticket_id}/comment?orderBy=created``.
+
+        Args:
+            ticket_id: The JIRA issue key (e.g. ``"PROJ-42"``).
+
+        Returns:
+            A list of normalised dicts with keys
+            ``id``, ``author``, ``body``, ``created_at``.
+
+        Raises:
+            TicketFetchError: On any non-2xx response or network error.
+        """
+        import datetime
+
+        url = f"{self._base_url}/rest/api/3/issue/{ticket_id}/comment"
+        headers = {
+            "Authorization": self._auth_header,
+            "Accept": "application/json",
+        }
+        params = {"orderBy": "created", "maxResults": "500"}
+        logger.debug("JiraRestClient: GET comments for issue %s", ticket_id)
+        try:
+            with httpx.Client(timeout=_HTTP_TIMEOUT) as client:
+                response = client.get(url, headers=headers, params=params)
+                response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise TicketFetchError(
+                f"JIRA API returned {exc.response.status_code} fetching comments "
+                f"for issue '{ticket_id}': {exc.response.text[:200]}",
+                source="jira",
+                status_code=exc.response.status_code,
+            ) from exc
+        except httpx.TransportError as exc:
+            raise TicketFetchError(
+                f"JIRA API network error fetching comments for issue '{ticket_id}': {exc}",
+                source="jira",
+            ) from exc
+
+        data = response.json()
+        raw_comments: list = data.get("comments", [])
+        results: List[dict] = []
+        for c in raw_comments:
+            author_field = c.get("author", {})
+            author = (
+                author_field.get("displayName", "")
+                if isinstance(author_field, dict)
+                else str(author_field)
+            )
+            # JIRA returns ISO-8601 datetime strings, e.g. "2024-01-15T10:30:00.000+0000"
+            created_str = c.get("created", "")
+            try:
+                dt = datetime.datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+                created_at = dt.timestamp()
+            except (ValueError, AttributeError):
+                created_at = 0.0
+            # Body may be in Atlassian Document Format (ADF) or plain text.
+            body_field = c.get("body", "")
+            if isinstance(body_field, dict):
+                # ADF: extract plain text from content nodes
+                body = self._extract_adf_text(body_field)
+            else:
+                body = str(body_field)
+            results.append({
+                "id": str(c.get("id", "")),
+                "author": author,
+                "body": body,
+                "created_at": created_at,
+            })
+        logger.info(
+            "JiraRestClient: fetched %d comment(s) for issue '%s'.",
+            len(results),
+            ticket_id,
+        )
+        return results
+
+    @staticmethod
+    def _extract_adf_text(adf: dict) -> str:
+        """Extract plain text from an Atlassian Document Format (ADF) dict.
+
+        Recursively walks the ``content`` tree and joins all ``text`` leaf nodes.
+
+        Args:
+            adf: The ADF document dict (``{"type": "doc", "content": [...]}``)
+
+        Returns:
+            Plain-text representation of the document.
+        """
+        parts: List[str] = []
+
+        def _walk(node: dict) -> None:
+            if node.get("type") == "text":
+                parts.append(node.get("text", ""))
+            for child in node.get("content", []):
+                if isinstance(child, dict):
+                    _walk(child)
+
+        _walk(adf)
+        return " ".join(parts).strip()
+
