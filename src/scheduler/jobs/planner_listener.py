@@ -1,5 +1,5 @@
 """
-Planner listener fallback job (Phase 6 — APScheduler polling).
+Planner listener fallback job (Phase 6 + Phase 10 — Idea-Discussion Workflow).
 
 Provides :func:`planner_listener_job`, an interval-based APScheduler job that
 acts as the **fallback / batch-polling path** for the Planner Agent.
@@ -12,8 +12,8 @@ missed during a Bolt downtime window.  It:
 1. Builds a short-lived Crew with the Planner Agent.
 2. Asks it to check ``slack/get_messages`` for unprocessed ``[planner]``
    messages since the last processed timestamp.
-3. For each new request, creates a JIRA epic / ClickUp task and replies in
-   the Slack thread.
+3. For each new message, applies the same Type A / Type B / Type C logic
+   as the Bolt handler (idea survey, conclusion, or actionable requirement).
 4. Updates ``_last_processed_ts`` so already-handled messages are not
    re-processed on the next run.
 
@@ -23,7 +23,7 @@ Usage (injected by :class:`~src.scheduler.runner.SchedulerRunner`)::
 
     scheduler.add_job(
         func=planner_listener_job,
-        kwargs={"registry": registry, "settings": settings},
+        kwargs={{"registry": registry, "settings": settings}},
         trigger="interval",
         seconds=300,
         id="planner_listener",
@@ -66,25 +66,76 @@ Steps:
    channel. Look for messages posted after timestamp {since_ts} that mention
    @ai-worker and contain the tag '[planner]' in the message text.
 
-2. For each such unprocessed message:
-   a. Strip the '@ai-worker [planner]' prefix from the message body to get
-      the clean product requirement text.
-   b. Understand the requirement — if it is ambiguous ask a clarifying
-      question in the thread; if it is clear enough:
-      - Create a JIRA epic via jira/create_issue.
-      - Create a matching ClickUp task via clickup/create_task.
-   c. Reply in the Slack thread via slack/reply_to_thread with a summary of
-      what was created or what clarification is needed.
-
-3. If no new '[planner]' messages are found, do nothing and report
+2. If no new '[planner]' messages are found, do nothing and report
    "No new planner messages found since {since_ts}."
+
+3. For each new '[planner]' message found, determine which request type
+   applies and execute the corresponding steps:
+
+   ════════════════════════════════════════════════════════════════
+   **Request Type A — Actionable Requirement**
+   ════════════════════════════════════════════════════════════════
+   Applies when the message contains a clear, scoped product requirement
+   ready to be turned into a development ticket.
+   Steps:
+   a. Strip the '@ai-worker [planner]' prefix from the message body.
+   b. If clear and actionable: create a JIRA epic via jira/create_issue and
+      a matching ClickUp task via clickup/create_task.
+   c. Reply in the Slack thread via slack/reply_to_thread with a summary and
+      the created ticket keys/IDs, OR clarifying questions if needed.
+
+   ════════════════════════════════════════════════════════════════
+   **Request Type B — Idea Survey & Discussion**
+   ════════════════════════════════════════════════════════════════
+   Applies when the message describes an exploratory product idea not yet
+   ready for a development ticket.
+   Steps:
+   a. Use slack/get_messages to read the full thread for that message.
+   b. Assess the discussion stage (initial / mid-discussion / survey ready).
+   c. Respond with survey questions or the full 8-dimension Idea Survey Plan:
+      ### 📋 Idea Survey Plan
+      1. Marketing Value  2. Market Scope  3. Business Model
+      4. Target Audience  5. Customer Pain Points Resolved
+      6. MVP Features     7. Quick Implementation Path  8. Budget Estimation
+   d. GUARDRAIL (BR-11): Do NOT create any tickets during Type B mode.
+
+   ════════════════════════════════════════════════════════════════
+   **Request Type C — Idea Discussion Conclusion**
+   ════════════════════════════════════════════════════════════════
+   Applies when the human's message contains a final accept or reject decision.
+   Accept signals: "let's do it", "approved", "proceed", "go ahead", "LGTM".
+   Reject signals: "rejected", "not now", "cancel", "drop it", "too risky".
+
+   REJECT path:
+   a. Read the full thread via slack/get_messages.
+   b. Post conclusion message in the thread via slack/reply_to_thread.
+   c. Create 1 JIRA issue + 1 ClickUp task with status "REJECTED" containing
+      the full discussion summary.
+   d. Reply with ticket URLs.
+   e. GUARDRAIL (BR-12): Do NOT mention or notify the Dev Lead.
+
+   ACCEPT path:
+   a. Read the full thread via slack/get_messages.
+   b. Post conclusion message in the thread via slack/reply_to_thread.
+   c. Create JIRA issue(s) + ClickUp task(s) with status "OPEN" containing
+      the full survey plan and discussion details.
+   d. Reply with ticket URLs.
+   e. Send a NEW message via slack/send_message (BR-13):
+      "[dev lead] A new product idea has been accepted: <idea name>.
+       Tickets: <ticket URLs>. Please start the development planning."
+   f. GUARDRAIL (BR-1): Never set any ticket to "ACCEPTED" status.
+      GUARDRAIL (BR-14): REJECTED tickets must use status "REJECTED".
+
+4. After processing all messages, report a summary of every action taken.
 
 Important: Do NOT re-process messages with timestamps at or before {since_ts}.
 """
 
 _PLANNER_FALLBACK_TASK_EXPECTED_OUTPUT: str = (
-    "A summary of actions taken: either 'No new planner messages found' or "
-    "a list of messages processed with the JIRA epic keys and ClickUp task IDs created."
+    "A summary of actions taken for each missed [planner] message: "
+    "'No new planner messages found' if none were missed, OR "
+    "for each message processed: the request type detected (A/B/C) and "
+    "the actions taken (survey posted / tickets created / Dev Lead notified)."
 )
 
 
@@ -96,6 +147,11 @@ def planner_listener_job(
 
     This job is the safety net for the Slack Bolt Socket Mode planner handler.
     Under normal operation it will find no new messages to process.
+
+    Handles the same three request types as the Bolt handler:
+    - **Type A**: Actionable requirement → create JIRA epic + ClickUp task.
+    - **Type B**: Idea survey → multi-turn discussion + Markdown plan.
+    - **Type C**: Conclusion → REJECTED or OPEN ticket + Dev Lead hand-off.
 
     Args:
         registry: The shared :class:`~src.agents.registry.AgentRegistry`
