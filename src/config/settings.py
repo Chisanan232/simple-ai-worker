@@ -212,6 +212,28 @@ class AppSettings(BaseSettings):
     """
 
     # ------------------------------------------------------------------
+    # PR Watcher — auto-merge and review comment handler (Phase 8c/8d)
+    # NOTE: All ticket status strings (ACCEPTED, IN PROGRESS, etc.) are
+    # NOT environment variables — they live in agents.yaml under each
+    # agent's workflow: block.  Only operational (non-status) fields here.
+    # ------------------------------------------------------------------
+
+    PR_AUTO_MERGE_TIMEOUT_SECONDS: int = 300
+    """Seconds to wait after a PR is opened before attempting auto-merge.
+
+    The PR watcher will not attempt to merge a PR until this many seconds
+    have elapsed since the PR was opened.  Requires at least one approving
+    review (BR-2).  Defaults to ``300`` (5 minutes).
+    """
+
+    PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS: int = 120
+    """Polling interval for the PR review comment handler job.
+
+    Controls how frequently the scheduler checks for unresolved PR review
+    comments or ``CHANGES_REQUESTED`` reviews.  Defaults to ``120`` seconds.
+    """
+
+    # ------------------------------------------------------------------
     # Agent Config
     # ------------------------------------------------------------------
 
