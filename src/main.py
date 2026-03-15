@@ -130,6 +130,17 @@ def main() -> None:
         settings.MAX_CONCURRENT_DEV_AGENTS,
     )
 
+    # Extract the WorkflowConfig for the dev_agent from the loaded YAML config.
+    workflow = agent_team.get_workflow("dev_agent")
+    if workflow is not None:
+        logger.info("WorkflowConfig loaded from agents.yaml (dev_agent.workflow).")
+    else:
+        logger.warning(
+            "No 'workflow:' block found for 'dev_agent' in agents.yaml — "
+            "scheduler jobs will use a legacy fallback.  "
+            "Add a 'workflow:' block to the dev_agent entry in agents.yaml."
+        )
+
     # Start APScheduler with all registered jobs.
     _runner = SchedulerRunner(
         interval_seconds=settings.SCHEDULER_INTERVAL_SECONDS,
@@ -137,6 +148,7 @@ def main() -> None:
         registry=_registry,
         settings=settings,
         executor=_executor,
+        workflow=workflow,
     )
     _runner.start()
 
