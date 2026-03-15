@@ -37,6 +37,7 @@ from __future__ import annotations
 import pytest
 
 from src.config.settings import AppSettings
+from src.ticket.workflow import WorkflowConfig
 
 # ---------------------------------------------------------------------------
 # Complete list of environment variables defined in the project's .env
@@ -98,3 +99,53 @@ def _isolate_app_settings_from_env_file(monkeypatch: pytest.MonkeyPatch) -> None
     # 2. Strip project env vars from the OS environment.
     for var in _PROJECT_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
+
+
+# ---------------------------------------------------------------------------
+# WorkflowConfig fixtures — shared across unit, integration, and e2e tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def default_workflow_config() -> WorkflowConfig:
+    """WorkflowConfig for Team A (standard status names used in examples)."""
+    return WorkflowConfig(
+        {
+            "scan_for_work": {"status_value": "ACCEPTED", "human_only": True},
+            "skip_rejected": {"status_value": "REJECTED"},
+            "start_development": {"status_value": "IN PROGRESS"},
+            "open_for_review": {"status_value": "IN REVIEW"},
+            "mark_complete": {"status_value": "COMPLETE"},
+            "update_with_context": {"status_value": ""},
+        }
+    )
+
+
+@pytest.fixture
+def team_b_workflow_config() -> WorkflowConfig:
+    """WorkflowConfig for Team B (different status vocabulary)."""
+    return WorkflowConfig(
+        {
+            "scan_for_work": {"status_value": "Approved", "human_only": True},
+            "skip_rejected": {"status_value": "Cancelled"},
+            "start_development": {"status_value": "Developing"},
+            "open_for_review": {"status_value": "PR Raised"},
+            "mark_complete": {"status_value": "Finished"},
+            "update_with_context": {"status_value": ""},
+        }
+    )
+
+
+@pytest.fixture
+def team_c_workflow_config() -> WorkflowConfig:
+    """WorkflowConfig for Project C (multi-word status names)."""
+    return WorkflowConfig(
+        {
+            "scan_for_work": {"status_value": "Ready for Dev", "human_only": True},
+            "skip_rejected": {"status_value": "Will Not Do"},
+            "start_development": {"status_value": "Active Development"},
+            "open_for_review": {"status_value": "Awaiting Code Review"},
+            "mark_complete": {"status_value": "Development Complete"},
+            "update_with_context": {"status_value": ""},
+        }
+    )

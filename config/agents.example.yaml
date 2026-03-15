@@ -335,11 +335,74 @@ agents:
         max_tokens: 4096
         top_p: 1.0
         timeout: 180
+
+    # ── Workflow Operation Configuration ─────────────────────────────────────
+    # Maps each named Dev Agent operation to the team's ticket status string.
+    # Change ONLY this block to adapt the Dev Agent to a different team's
+    # workflow — no Python code changes are required.
+    #
+    # Team B example:   scan_for_work.status_value: "Approved"
+    # Project C example: scan_for_work.status_value: "Ready for Dev"
+    # ─────────────────────────────────────────────────────────────────────────
+    workflow:
+
+      # The state that signals "this ticket is approved and ready for development".
+      # human_only: true → AI may READ this state but NEVER WRITE it. (BR-1)
+      scan_for_work:
+        status_value: "ACCEPTED"
+        human_only: true
+
+      # Tickets in this state are silently skipped by the Dev Agent. (BR-3)
+      skip_rejected:
+        status_value: "REJECTED"
+
+      # The Dev Agent transitions to this state as its very FIRST action
+      # when it begins working on a ticket (before writing any code).
+      start_development:
+        status_value: "IN PROGRESS"
+
+      # Transitioned to when the Dev Agent opens a GitHub PR.
+      open_for_review:
+        status_value: "IN REVIEW"
+
+      # Transitioned to when the PR is merged (by user or by AI auto-merge).
+      mark_complete:
+        status_value: "COMPLETE"
+
+      # update_with_context: no state change — only posts a discussion summary
+      # comment to the ticket. No status_value needed.
+      update_with_context:
+        status_value: ""    # comment-only operation; no state transition
+
     mcps:
-      - jira
-      - clickup
-      - github          # dev_agent is the only role that needs GitHub
-      - slack
+      - server: jira
+        tool_filter:
+          - search_issues           # SCAN_FOR_WORK — find ready tickets
+          - get_issue               # fetch full ticket details
+          - transition_issue        # START_DEVELOPMENT, OPEN_FOR_REVIEW, MARK_COMPLETE
+          - add_comment             # UPDATE_WITH_CONTEXT — post Slack thread summary (S3a)
+      - server: clickup
+        tool_filter:
+          - search_tasks            # SCAN_FOR_WORK
+          - get_task                # fetch full task details
+          - update_task             # START_DEVELOPMENT, OPEN_FOR_REVIEW, MARK_COMPLETE
+          - add_comment             # UPDATE_WITH_CONTEXT — post Slack thread summary (S3a)
+      - server: github
+        tool_filter:
+          - create_pull_request         # OPEN_FOR_REVIEW — open PR after implementation
+          - get_pull_request            # check approval + merge status (S7b)
+          - merge_pull_request          # auto-merge approved PRs (S7b, BR-2)
+          - get_pull_request_reviews    # detect CHANGES_REQUESTED (S6b)
+          - get_pull_request_comments   # read inline review comments (S6b)
+          - reply_to_review_comment     # confirm fix addressed (S6b)
+          - request_review              # re-request review after fixes (optional)
+          - search_repositories         # locate the correct repo for PR creation
+      - server: slack
+        tool_filter:
+          - send_message            # post notifications (PR opened, merged)
+          - reply_to_thread         # S3a confirmation reply; S3b ask-for-ticket-id
+          - get_messages            # fetch full Slack thread history (S3a)
+          - get_thread_permalink    # construct permalink for ticket comment
     apps: []
     allow_delegation: false
     verbose: false

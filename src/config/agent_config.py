@@ -58,7 +58,7 @@ Design decisions
 
 from __future__ import annotations
 
-from typing import Dict, List, Literal
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -68,6 +68,8 @@ __all__: List[str] = [
     "MCPServerDefinition",
     "MCPServerRef",
     "MCPRef",
+    "WorkflowOperationConfig",
+    "WorkflowConfigModel",
     "AgentConfig",
     "AgentTeamConfig",
 ]
@@ -212,6 +214,95 @@ class MCPServerRef(BaseModel):
 MCPRef = str | MCPServerRef
 
 
+# ---------------------------------------------------------------------------
+# Workflow Models
+# ---------------------------------------------------------------------------
+
+
+class WorkflowOperationConfig(BaseModel):
+    """Configuration for a single workflow operation entry in agents.yaml.
+
+    Mirrors :class:`~src.ticket.workflow.OperationConfig` but as a Pydantic
+    model so it can be validated as part of :class:`AgentConfig`.
+
+    Attributes:
+        status_value: The exact ticket status string for this operation
+            (e.g. ``"ACCEPTED"``, ``"IN PROGRESS"``).  May be empty for
+            comment-only operations like ``update_with_context``.
+        human_only: When ``True`` the AI may read this status but must
+            **never write** it (BR-1).  Defaults to ``False``.
+    """
+
+    status_value: str = ""
+    human_only: bool = False
+
+
+class WorkflowConfigModel(BaseModel):
+    """Pydantic model for the ``workflow:`` block inside an agent's YAML entry.
+
+    All six operations must be present.  Values are validated at load time
+    so that a missing or misspelled key raises a clear error immediately.
+
+    Attributes:
+        scan_for_work:       Status that signals a ticket is ready to develop.
+        skip_rejected:       Status that marks a ticket as cancelled/rejected.
+        start_development:   Status the agent writes when it begins coding.
+        open_for_review:     Status written when the agent opens a GitHub PR.
+        mark_complete:       Status written when the PR is merged.
+        update_with_context: Comment-only operation; status_value may be empty.
+    """
+
+    scan_for_work: WorkflowOperationConfig
+    skip_rejected: WorkflowOperationConfig
+    start_development: WorkflowOperationConfig
+    open_for_review: WorkflowOperationConfig
+    mark_complete: WorkflowOperationConfig
+    update_with_context: WorkflowOperationConfig
+
+    def to_workflow_config(self) -> "WorkflowConfig":
+        """Convert this Pydantic model to a :class:`~src.ticket.workflow.WorkflowConfig`.
+
+        Returns:
+            A :class:`~src.ticket.workflow.WorkflowConfig` instance ready for
+            use by the scheduler jobs.
+        """
+        from src.ticket.workflow import WorkflowConfig
+
+        return WorkflowConfig(
+            {
+                "scan_for_work": {
+                    "status_value": self.scan_for_work.status_value,
+                    "human_only": self.scan_for_work.human_only,
+                },
+                "skip_rejected": {
+                    "status_value": self.skip_rejected.status_value,
+                    "human_only": self.skip_rejected.human_only,
+                },
+                "start_development": {
+                    "status_value": self.start_development.status_value,
+                    "human_only": self.start_development.human_only,
+                },
+                "open_for_review": {
+                    "status_value": self.open_for_review.status_value,
+                    "human_only": self.open_for_review.human_only,
+                },
+                "mark_complete": {
+                    "status_value": self.mark_complete.status_value,
+                    "human_only": self.mark_complete.human_only,
+                },
+                "update_with_context": {
+                    "status_value": self.update_with_context.status_value,
+                    "human_only": self.update_with_context.human_only,
+                },
+            }
+        )
+
+
+# ---------------------------------------------------------------------------
+# Agent Config Models
+# ---------------------------------------------------------------------------
+
+
 class AgentConfig(BaseModel):
     """Configuration for a single AI agent.
 
@@ -240,6 +331,15 @@ class AgentConfig(BaseModel):
             agents in the crew.  Defaults to ``False``.
         verbose: Whether the CrewAI agent prints verbose reasoning output.
             Defaults to ``False``.
+        workflow: Optional workflow operation configuration for Dev Agent
+            scheduler jobs.  Maps each named operation (``scan_for_work``,
+            ``skip_rejected``, ``start_development``, ``open_for_review``,
+            ``mark_complete``, ``update_with_context``) to the team-specific
+            ticket status string.  Only required for agents that drive
+            the :func:`~src.scheduler.jobs.scan_tickets.scan_and_dispatch_job`
+            and related scheduler jobs (typically the ``dev_agent``).
+            Convert to a runtime :class:`~src.ticket.workflow.WorkflowConfig`
+            via :meth:`WorkflowConfigModel.to_workflow_config`.
     """
 
     id: str = Field(min_length=1)
@@ -251,6 +351,7 @@ class AgentConfig(BaseModel):
     mcps: List["MCPRef"] = Field(default_factory=list)
     allow_delegation: bool = False
     verbose: bool = False
+    workflow: Optional[WorkflowConfigModel] = None
 
     @field_validator("id")
     @classmethod
@@ -329,3 +430,20 @@ class AgentTeamConfig(BaseModel):
                         f"Available servers: {sorted(known) if known else '(none defined)'}."
                     )
         return self
+
+    def get_workflow(self, agent_id: str = "dev_agent") -> Optional["WorkflowConfig"]:
+        """Return the runtime :class:`~src.ticket.workflow.WorkflowConfig` for
+        the given agent, or ``None`` if that agent has no ``workflow:`` block.
+
+        Args:
+            agent_id: The ``id`` of the agent whose workflow config to
+                retrieve.  Defaults to ``"dev_agent"``.
+
+        Returns:
+            A :class:`~src.ticket.workflow.WorkflowConfig` instance, or
+            ``None`` if the agent is not found or has no workflow block.
+        """
+        for agent in self.agents:
+            if agent.id == agent_id and agent.workflow is not None:
+                return agent.workflow.to_workflow_config()
+        return None

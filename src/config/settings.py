@@ -212,6 +212,28 @@ class AppSettings(BaseSettings):
     """
 
     # ------------------------------------------------------------------
+    # PR Watcher — auto-merge and review comment handler (Phase 8c/8d)
+    # NOTE: All ticket status strings (ACCEPTED, IN PROGRESS, etc.) are
+    # NOT environment variables — they live in agents.yaml under each
+    # agent's workflow: block.  Only operational (non-status) fields here.
+    # ------------------------------------------------------------------
+
+    PR_AUTO_MERGE_TIMEOUT_SECONDS: int = 300
+    """Seconds to wait after a PR is opened before attempting auto-merge.
+
+    The PR watcher will not attempt to merge a PR until this many seconds
+    have elapsed since the PR was opened.  Requires at least one approving
+    review (BR-2).  Defaults to ``300`` (5 minutes).
+    """
+
+    PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS: int = 120
+    """Polling interval for the PR review comment handler job.
+
+    Controls how frequently the scheduler checks for unresolved PR review
+    comments or ``CHANGES_REQUESTED`` reviews.  Defaults to ``120`` seconds.
+    """
+
+    # ------------------------------------------------------------------
     # Agent Config
     # ------------------------------------------------------------------
 
@@ -291,6 +313,47 @@ class AppSettings(BaseSettings):
     """Base URL for the Slack MCP server endpoint.
 
     Defaults to ``http://127.0.0.1:8103/mcp`` for local development.
+    """
+
+    # ------------------------------------------------------------------
+    # Direct REST API — JIRA (fetch_tickets_for_operation)
+    # These complement the MCP_JIRA_* settings above.  The JIRA REST API
+    # client reads ATLASSIAN_URL and ATLASSIAN_EMAIL (already defined
+    # below via pydantic-settings) plus MCP_JIRA_TOKEN (Section 7) for
+    # Basic Auth.  Only the optional project-key scoping is new here.
+    # ------------------------------------------------------------------
+
+    JIRA_PROJECT_KEY: Optional[str] = None
+    """Optional JIRA project key used to scope the JQL query when fetching
+    tickets directly via the REST API (e.g. ``"PROJ"`` or ``"MYTEAM"``).
+
+    When set, the generated JQL becomes::
+
+        status = "ACCEPTED" AND project = "PROJ" AND status != "REJECTED"
+        ORDER BY created ASC
+
+    When ``None`` (the default), the query searches the entire workspace.
+    Corresponds to ``JIRA_PROJECT_KEY=`` in ``.env``.
+    """
+
+    # ------------------------------------------------------------------
+    # Direct REST API — ClickUp (fetch_tickets_for_operation)
+    # MCP_CLICKUP_TOKEN (Section 7) is reused as the ClickUp personal
+    # API token.  Only the list-ID scoping is new here.
+    # ------------------------------------------------------------------
+
+    CLICKUP_LIST_ID: Optional[str] = None
+    """ClickUp list ID used to scope task queries via the direct REST API.
+
+    The ClickUp v2 API endpoint ``GET /api/v2/list/{list_id}/task`` requires
+    a list ID — there is no workspace-wide "search by status" endpoint.
+    **Required** when ClickUp is used as a ticket source.
+
+    Find it in the ClickUp URL while viewing the list::
+
+        https://app.clickup.com/<team_id>/v/li/<list_id>
+
+    Corresponds to ``CLICKUP_LIST_ID=`` in ``.env``.
     """
 
 
