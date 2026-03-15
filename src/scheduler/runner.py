@@ -44,6 +44,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from .jobs.dev_lead_listener import dev_lead_listener_job
 from .jobs.hello_world import hello_world_job
 from .jobs.planner_listener import planner_listener_job
+from .jobs.pr_merge_watcher import pr_merge_watcher_job
+from .jobs.pr_review_comment_handler import pr_review_comment_handler_job
 from .jobs.scan_tickets import scan_and_dispatch_job
 
 if TYPE_CHECKING:
@@ -51,6 +53,7 @@ if TYPE_CHECKING:
 
     from src.agents.registry import AgentRegistry
     from src.config.settings import AppSettings
+    from src.ticket.workflow import WorkflowConfig
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +92,14 @@ class SchedulerRunner:
         registry: Optional["AgentRegistry"] = None,
         settings: Optional["AppSettings"] = None,
         executor: Optional[ThreadPoolExecutor] = None,
+        workflow: Optional["WorkflowConfig"] = None,
     ) -> None:
         self._interval_seconds = interval_seconds
         self._timezone = timezone
         self._registry = registry
         self._settings = settings
         self._executor = executor
+        self._workflow = workflow
         self._scheduler: BackgroundScheduler = BackgroundScheduler(
             timezone=self._timezone,
         )
@@ -161,6 +166,13 @@ class SchedulerRunner:
             - :func:`~src.scheduler.jobs.dev_lead_listener.dev_lead_listener_job`
               — fallback Dev Lead Slack polling, fires every
               ``interval_seconds``.
+        Phase-8 jobs (registered only when *registry*, *settings*, and
+        *executor* were supplied to the constructor):
+            - :func:`~src.scheduler.jobs.pr_merge_watcher.pr_merge_watcher_job`
+              — PR auto-merge watcher, fires every 60 seconds.
+            - :func:`~src.scheduler.jobs.pr_review_comment_handler.pr_review_comment_handler_job`
+              — PR review comment fix handler, fires every
+              ``PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS``.
         """
         hello_world: "Job" = self._scheduler.add_job(
             func=hello_world_job,
@@ -172,7 +184,7 @@ class SchedulerRunner:
         )
         logger.debug("Registered job: %s (id=%s).", hello_world.name, hello_world.id)
 
-        # Phase 6 jobs — only when agent infrastructure is available.
+        # Phase 6 + Phase 8 jobs — only when agent infrastructure is available.
         if self._registry is not None and self._settings is not None and self._executor is not None:
             scan_job: "Job" = self._scheduler.add_job(
                 func=scan_and_dispatch_job,
@@ -180,6 +192,7 @@ class SchedulerRunner:
                     "registry": self._registry,
                     "settings": self._settings,
                     "executor": self._executor,
+                    "workflow": self._workflow,
                 },
                 trigger="interval",
                 seconds=self._interval_seconds,
@@ -217,10 +230,53 @@ class SchedulerRunner:
             )
             logger.debug("Registered job: %s (id=%s).", dev_lead_job.name, dev_lead_job.id)
 
-            logger.info("Phase-6 scheduler jobs registered: scan_and_dispatch, planner_listener, dev_lead_listener.")
+            # Phase 8c — PR auto-merge watcher (BR-2: approved PRs only).
+            pr_merge_interval: int = 60
+            merge_watcher_job: "Job" = self._scheduler.add_job(
+                func=pr_merge_watcher_job,
+                kwargs={
+                    "registry": self._registry,
+                    "settings": self._settings,
+                    "executor": self._executor,
+                    "workflow": self._workflow,
+                },
+                trigger="interval",
+                seconds=pr_merge_interval,
+                id="pr_merge_watcher",
+                name="PR Auto-Merge Watcher — dev_agent (BR-2: approved only)",
+                replace_existing=True,
+            )
+            logger.debug("Registered job: %s (id=%s).", merge_watcher_job.name, merge_watcher_job.id)
+
+            # Phase 8d — PR review comment fix handler (no self-approve).
+            pr_comment_interval: int = getattr(
+                self._settings,
+                "PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS",
+                120,
+            )
+            review_comment_job: "Job" = self._scheduler.add_job(
+                func=pr_review_comment_handler_job,
+                kwargs={
+                    "registry": self._registry,
+                    "settings": self._settings,
+                    "executor": self._executor,
+                },
+                trigger="interval",
+                seconds=pr_comment_interval,
+                id="pr_review_comment_handler",
+                name="PR Review Comment Handler — dev_agent (no self-approve)",
+                replace_existing=True,
+            )
+            logger.debug("Registered job: %s (id=%s).", review_comment_job.name, review_comment_job.id)
+
+            logger.info(
+                "Phase-6/8 scheduler jobs registered: scan_and_dispatch, "
+                "planner_listener, dev_lead_listener, pr_merge_watcher, "
+                "pr_review_comment_handler."
+            )
         else:
             logger.info(
-                "Phase-6 scheduler jobs NOT registered "
+                "Phase-6/8 scheduler jobs NOT registered "
                 "(registry/settings/executor not provided — running in minimal mode)."
             )
 
