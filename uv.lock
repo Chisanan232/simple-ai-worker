@@ -751,6 +751,18 @@ wheels = [
 ]
 
 [[package]]
+name = "freezegun"
+version = "1.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/dd/23e2f4e357f8fd3bdff613c1fe4466d21bfb00a6177f238079b17f7b1c84/freezegun-1.5.5.tar.gz", hash = "sha256:ac7742a6cc6c25a2c35e9292dfd554b897b517d2dec26891a2e8debf205cb94a", size = 35914, upload-time = "2025-08-09T10:39:08.338Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/2e/b41d8a1a917d6581fc27a35d05561037b048e47df50f27f8ac9c7e27a710/freezegun-1.5.5-py3-none-any.whl", hash = "sha256:cd557f4a75cf074e84bc374249b9dd491eaeacd61376b9eb3c423282211619d2", size = 19266, upload-time = "2025-08-09T10:39:06.636Z" },
+]
+
+[[package]]
 name = "frozenlist"
 version = "1.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2642,6 +2654,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-httpserver"
+version = "1.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "werkzeug" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/50/17/ad187f46998814014f7cda309de700b87c0eb4b2e111e18bc8c819be7116/pytest_httpserver-1.1.5.tar.gz", hash = "sha256:dc3d82e1fe00e491829d8939c549bf4bd9b39a260f87113c619b9d517c2f8ff1", size = 70974, upload-time = "2026-02-14T13:27:23.412Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/df/0bdf90b84c6a586a9fd2b509523a3ab26b1cc1b1dba2fb62a32e4411ea9e/pytest_httpserver-1.1.5-py3-none-any.whl", hash = "sha256:ee83feb587ab652c0c6729598db2820e9048233bac8df756818b7845a1621d0a", size = 23330, upload-time = "2026-02-14T13:27:22.119Z" },
+]
+
+[[package]]
 name = "pytest-rerunfailures"
 version = "16.0.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2989,6 +3013,7 @@ dependencies = [
     { name = "apscheduler" },
     { name = "crewai" },
     { name = "crewai-tools" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyyaml" },
@@ -2999,9 +3024,11 @@ dependencies = [
 dev = [
     { name = "aiohttp" },
     { name = "coverage" },
+    { name = "freezegun" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "pytest-httpserver" },
     { name = "pytest-rerunfailures" },
 ]
 pre-commit-ci = [
@@ -3015,6 +3042,7 @@ requires-dist = [
     { name = "apscheduler", specifier = ">=3.11.2" },
     { name = "crewai", specifier = ">=1.10.1" },
     { name = "crewai-tools", specifier = ">=1.10.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pydantic", specifier = ">=2.11.10" },
     { name = "pydantic-settings", specifier = ">=2.10.1" },
     { name = "pyyaml", specifier = ">=6.0.2" },
@@ -3025,9 +3053,11 @@ requires-dist = [
 dev = [
     { name = "aiohttp", specifier = ">=3.12.13" },
     { name = "coverage", specifier = "~=7.10" },
+    { name = "freezegun", specifier = ">=1.5.5" },
     { name = "pytest", specifier = ">=8.1.1,<10" },
     { name = "pytest-asyncio", specifier = ">=0.23.0,<2" },
     { name = "pytest-cov", specifier = ">=5.0.0,<8" },
+    { name = "pytest-httpserver", specifier = ">=1.0.0" },
     { name = "pytest-rerunfailures", specifier = ">=14.0,<17" },
 ]
 pre-commit-ci = [
@@ -3530,6 +3560,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/c2/b6/b9afed2afadddaf5ebb2afa801abf4b0868f42f8539bfe4b071b5266c9fe/websockets-16.0-cp314-cp314t-win32.whl", hash = "sha256:5a4b4cc550cb665dd8a47f868c8d04c8230f857363ad3c9caf7a0c3bf8c61ca6", size = 178085, upload-time = "2026-01-10T09:23:33.816Z" },
     { url = "https://files.pythonhosted.org/packages/9f/3e/28135a24e384493fa804216b79a6a6759a38cc4ff59118787b9fb693df93/websockets-16.0-cp314-cp314t-win_amd64.whl", hash = "sha256:b14dc141ed6d2dde437cddb216004bcac6a1df0935d79656387bd41632ba0bbd", size = 178531, upload-time = "2026-01-10T09:23:35.016Z" },
     { url = "https://files.pythonhosted.org/packages/6f/28/258ebab549c2bf3e64d2b0217b973467394a9cea8c42f70418ca2c5d0d2e/websockets-16.0-py3-none-any.whl", hash = "sha256:1637db62fad1dc833276dded54215f2c7fa46912301a24bd94d45d46a011ceec", size = 171598, upload-time = "2026-01-10T09:23:45.395Z" },
+]
+
+[[package]]
+name = "werkzeug"
+version = "3.1.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/61/f1/ee81806690a87dab5f5653c1f146c92bc066d7f4cebc603ef88eb9e13957/werkzeug-3.1.6.tar.gz", hash = "sha256:210c6bede5a420a913956b4791a7f4d6843a43b6fcee4dfa08a65e93007d0d25", size = 864736, upload-time = "2026-02-19T15:17:18.884Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/ec/d58832f89ede95652fd01f4f24236af7d32b70cab2196dfcc2d2fd13c5c2/werkzeug-3.1.6-py3-none-any.whl", hash = "sha256:7ddf3357bb9564e407607f988f683d72038551200c704012bb9a4c523d42f131", size = 225166, upload-time = "2026-02-19T15:17:17.475Z" },
 ]
 
 [[package]]
