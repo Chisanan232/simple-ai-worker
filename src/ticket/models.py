@@ -1,7 +1,7 @@
 """
-Pure data models for ticket and PR state (Phase 7).
+Pure data models for ticket and PR state (Phase 7 + Phase 9).
 
-Both models use **Pydantic** ``BaseModel`` for field validation, clear
+All models use **Pydantic** ``BaseModel`` for field validation, clear
 schema documentation, and IDE-friendly type hints.
 
 Classes
@@ -12,6 +12,10 @@ TicketRecord
 PRRecord
     Mutable record tracking a pull request opened by the Dev Agent.
     Fields are updated in-place by the watcher jobs as the PR progresses.
+TicketComment
+    Immutable snapshot of a single comment on a ticket (JIRA or ClickUp).
+    Used by the plan-and-notify job to detect new human feedback on
+    ``IN PLANNING`` tickets.
 """
 
 from __future__ import annotations
@@ -20,7 +24,7 @@ from typing import List
 
 from pydantic import BaseModel, ConfigDict, Field
 
-__all__: List[str] = ["TicketRecord", "PRRecord"]
+__all__: List[str] = ["TicketRecord", "PRRecord", "TicketComment"]
 
 
 class TicketRecord(BaseModel):
@@ -69,3 +73,32 @@ class PRRecord(BaseModel):
     opened_at_utc: float = Field(..., description="Unix timestamp (UTC) when the PR was opened.")
     approval_count: int = Field(default=0, description="Approving review count observed at last poll.", ge=0)
     is_merged: bool = Field(default=False, description="Whether the PR has been merged.")
+
+
+class TicketComment(BaseModel):
+    """Immutable snapshot of a single comment on a JIRA or ClickUp ticket.
+
+    Used by :func:`~src.scheduler.jobs.plan_and_notify.plan_and_notify_job`
+    to detect new human feedback on ``IN PLANNING`` tickets and trigger the
+    Dev Agent plan-revision loop.
+
+    Attributes:
+        id:          The comment identifier (string; numeric for JIRA, may be
+                     alphanumeric for ClickUp).
+        author:      Display name or username of the comment author.
+        body:        The raw comment text (may be Markdown or plain text).
+        created_at:  Unix timestamp (UTC seconds) when the comment was posted.
+                     Used as a watermark to detect new comments since the last
+                     plan-revision run.
+        source:      The ticket system this comment came from — ``"jira"``
+                     or ``"clickup"``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(..., description="Comment identifier.")
+    author: str = Field(default="", description="Display name of the comment author.")
+    body: str = Field(default="", description="Comment text body.")
+    created_at: float = Field(default=0.0, description="Unix timestamp (UTC) when the comment was created.")
+    source: str = Field(..., description="Ticket system: 'jira' or 'clickup'.")
+
