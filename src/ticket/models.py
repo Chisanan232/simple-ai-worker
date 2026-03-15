@@ -101,4 +101,3 @@ class TicketComment(BaseModel):
     body: str = Field(default="", description="Comment text body.")
     created_at: float = Field(default=0.0, description="Unix timestamp (UTC) when the comment was created.")
     source: str = Field(..., description="Ticket system: 'jira' or 'clickup'.")
-

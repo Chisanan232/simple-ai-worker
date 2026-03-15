@@ -73,6 +73,7 @@ class TestTicketCommentModel:
     def test_comment_is_frozen(self) -> None:
         """INT-TC-01c: TicketComment is immutable (frozen=True)."""
         from pydantic import ValidationError
+
         comment = TicketComment(id="c-1", source="jira")
         with pytest.raises((TypeError, AttributeError, ValidationError)):
             comment.body = "mutated"  # type: ignore[misc]
@@ -80,12 +81,14 @@ class TestTicketCommentModel:
     def test_comment_missing_required_id_raises(self) -> None:
         """INT-TC-01d: TicketComment raises ValidationError when id is missing."""
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             TicketComment(source="jira")  # type: ignore[call-arg]
 
     def test_comment_missing_required_source_raises(self) -> None:
         """INT-TC-01e: TicketComment raises ValidationError when source is missing."""
         from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             TicketComment(id="c-1")  # type: ignore[call-arg]
 
@@ -247,5 +250,3 @@ class TestClickUpTrackerFetchComments:
         tracker = self._make_clickup_tracker([])
         result = tracker.fetch_ticket_comments("cu-0")
         assert result == []
-
-

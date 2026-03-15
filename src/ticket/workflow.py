@@ -150,14 +150,16 @@ class WorkflowConfig:
     """
 
     # Original six operations — must be present in every config dict.
-    _REQUIRED_OPS = frozenset({
-        WorkflowOperation.SCAN_FOR_WORK,
-        WorkflowOperation.SKIP_REJECTED,
-        WorkflowOperation.START_DEVELOPMENT,
-        WorkflowOperation.OPEN_FOR_REVIEW,
-        WorkflowOperation.MARK_COMPLETE,
-        WorkflowOperation.UPDATE_WITH_CONTEXT,
-    })
+    _REQUIRED_OPS = frozenset(
+        {
+            WorkflowOperation.SCAN_FOR_WORK,
+            WorkflowOperation.SKIP_REJECTED,
+            WorkflowOperation.START_DEVELOPMENT,
+            WorkflowOperation.OPEN_FOR_REVIEW,
+            WorkflowOperation.MARK_COMPLETE,
+            WorkflowOperation.UPDATE_WITH_CONTEXT,
+        }
+    )
 
     # Phase-9 additions — optional; default to empty / non-human-only so that
     # existing agents.yaml files that only define the original six keys continue

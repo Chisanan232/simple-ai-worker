@@ -114,9 +114,11 @@ def _make_tracker_registry(
 # Autouse: clear plan_and_notify module-level state before each test
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _reset_plan_and_notify_state() -> None:  # type: ignore[return]
     import src.scheduler.jobs.plan_and_notify as pn_mod
+
     pn_mod._in_planning_tickets.clear()
     pn_mod._plan_comment_watermarks.clear()
     yield
@@ -324,8 +326,10 @@ class TestPlanAndNotifyDispatchGuard:
         pn_mod._in_planning_tickets.add("PROJ-10")
         registry = _make_registry()
 
-        with patch("src.scheduler.jobs.plan_and_notify.Task"), \
-             patch("src.scheduler.jobs.plan_and_notify.CrewBuilder") as mock_cb:
+        with (
+            patch("src.scheduler.jobs.plan_and_notify.Task"),
+            patch("src.scheduler.jobs.plan_and_notify.CrewBuilder") as mock_cb,
+        ):
             mock_crew = MagicMock()
             mock_crew.kickoff.return_value = "plan posted"
             mock_cb.build.return_value = mock_crew
@@ -380,8 +384,10 @@ class TestPlanAndNotifyRevision:
         registry = _make_registry()
         latest_ts = 9999.0
 
-        with patch("src.scheduler.jobs.plan_and_notify.Task"), \
-             patch("src.scheduler.jobs.plan_and_notify.CrewBuilder") as mock_cb:
+        with (
+            patch("src.scheduler.jobs.plan_and_notify.Task"),
+            patch("src.scheduler.jobs.plan_and_notify.CrewBuilder") as mock_cb,
+        ):
             mock_crew = MagicMock()
             mock_crew.kickoff.return_value = "revised plan posted"
             mock_cb.build.return_value = mock_crew
@@ -464,14 +470,16 @@ class TestPlanAndNotifyNoRevision:
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
         # Six-key config: open_for_dev defaults to empty string
-        six_key_workflow = WorkflowConfig({
-            "scan_for_work": {"status_value": "ACCEPTED", "human_only": True},
-            "skip_rejected": {"status_value": "REJECTED"},
-            "start_development": {"status_value": "IN PROGRESS"},
-            "open_for_review": {"status_value": "IN REVIEW"},
-            "mark_complete": {"status_value": "COMPLETE"},
-            "update_with_context": {"status_value": ""},
-        })
+        six_key_workflow = WorkflowConfig(
+            {
+                "scan_for_work": {"status_value": "ACCEPTED", "human_only": True},
+                "skip_rejected": {"status_value": "REJECTED"},
+                "start_development": {"status_value": "IN PROGRESS"},
+                "open_for_review": {"status_value": "IN REVIEW"},
+                "mark_complete": {"status_value": "COMPLETE"},
+                "update_with_context": {"status_value": ""},
+            }
+        )
         mock_tr = _make_tracker_registry()
         executor = MagicMock(spec=ThreadPoolExecutor)
         executor.submit = MagicMock()
@@ -525,4 +533,3 @@ class TestPlanAndNotifyTaskContent:
         assert "Do NOT write any code" in desc
         assert "Do NOT open a GitHub Pull Request" in desc
         assert "Revision Notes" in desc
-

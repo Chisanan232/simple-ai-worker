@@ -279,6 +279,7 @@ class TestPhase9WorkflowOperations:
     def test_int_wf_04_workflow_config_model_includes_new_ops(self) -> None:
         """INT-WF-04: WorkflowConfigModel.to_workflow_config() includes open_for_dev and in_planning."""
         from src.config.agent_config import WorkflowConfigModel, WorkflowOperationConfig
+
         model = WorkflowConfigModel(
             scan_for_work=WorkflowOperationConfig(status_value="ACCEPTED", human_only=True),
             skip_rejected=WorkflowOperationConfig(status_value="REJECTED"),
@@ -298,6 +299,7 @@ class TestPhase9WorkflowOperations:
     def test_int_wf_04b_workflow_config_model_defaults(self) -> None:
         """INT-WF-04b: WorkflowConfigModel defaults for open_for_dev and in_planning are empty."""
         from src.config.agent_config import WorkflowConfigModel, WorkflowOperationConfig
+
         model = WorkflowConfigModel(
             scan_for_work=WorkflowOperationConfig(status_value="ACCEPTED", human_only=True),
             skip_rejected=WorkflowOperationConfig(status_value="REJECTED"),
@@ -324,4 +326,3 @@ class TestPhase9WorkflowOperations:
         assert cfg.matches(WorkflowOperation.IN_PLANNING, "IN PLANNING") is True
         assert cfg.matches(WorkflowOperation.IN_PLANNING, "in planning") is True
         assert cfg.matches(WorkflowOperation.IN_PLANNING, "ACCEPTED") is False
-

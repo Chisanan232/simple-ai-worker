@@ -134,8 +134,10 @@ class TestDevLeadFeasibilityTaskDescription:
 
         captured_tasks: list = []
 
-        with patch("src.slack_app.handlers.dev_lead.Task") as mock_task_cls, \
-             patch("src.slack_app.handlers.dev_lead.CrewBuilder") as mock_cb:
+        with (
+            patch("src.slack_app.handlers.dev_lead.Task") as mock_task_cls,
+            patch("src.slack_app.handlers.dev_lead.CrewBuilder") as mock_cb,
+        ):
             mock_crew = MagicMock()
             mock_crew.kickoff.return_value = "OK"
             mock_cb.build.return_value = mock_crew
@@ -283,8 +285,7 @@ class TestDevLeadMissingAgent:
 
         event = _make_message_event()
 
-        with patch("src.slack_app.handlers.dev_lead.Task"), \
-             patch("src.slack_app.handlers.dev_lead.CrewBuilder"):
+        with patch("src.slack_app.handlers.dev_lead.Task"), patch("src.slack_app.handlers.dev_lead.CrewBuilder"):
             executor = ThreadPoolExecutor(max_workers=1)
             try:
                 dev_lead_handler(
@@ -357,4 +358,3 @@ class TestDevLeadEmptyMessage:
 
         mock_say.assert_called()
         mock_executor.submit.assert_not_called()
-

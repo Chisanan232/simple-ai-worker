@@ -125,4 +125,3 @@ class TicketTracker(ABC):
             :class:`~src.ticket.rest_client.TicketFetchError`: On API error.
         """
         ...
-

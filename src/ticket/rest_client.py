@@ -277,15 +277,15 @@ class ClickUpRestClient:
             if not comment_text:
                 # Rich comments store text in comment[].text
                 parts = c.get("comment", [])
-                comment_text = " ".join(
-                    p.get("text", "") for p in parts if isinstance(p, dict)
-                )
-            results.append({
-                "id": str(c.get("id", "")),
-                "author": author,
-                "body": comment_text,
-                "created_at": created_at,
-            })
+                comment_text = " ".join(p.get("text", "") for p in parts if isinstance(p, dict))
+            results.append(
+                {
+                    "id": str(c.get("id", "")),
+                    "author": author,
+                    "body": comment_text,
+                    "created_at": created_at,
+                }
+            )
         logger.info(
             "ClickUpRestClient: fetched %d comment(s) for task '%s'.",
             len(results),
@@ -506,11 +506,7 @@ class JiraRestClient:
         results: List[dict] = []
         for c in raw_comments:
             author_field = c.get("author", {})
-            author = (
-                author_field.get("displayName", "")
-                if isinstance(author_field, dict)
-                else str(author_field)
-            )
+            author = author_field.get("displayName", "") if isinstance(author_field, dict) else str(author_field)
             # JIRA returns ISO-8601 datetime strings, e.g. "2024-01-15T10:30:00.000+0000"
             created_str = c.get("created", "")
             try:
@@ -525,12 +521,14 @@ class JiraRestClient:
                 body = self._extract_adf_text(body_field)
             else:
                 body = str(body_field)
-            results.append({
-                "id": str(c.get("id", "")),
-                "author": author,
-                "body": body,
-                "created_at": created_at,
-            })
+            results.append(
+                {
+                    "id": str(c.get("id", "")),
+                    "author": author,
+                    "body": body,
+                    "created_at": created_at,
+                }
+            )
         logger.info(
             "JiraRestClient: fetched %d comment(s) for issue '%s'.",
             len(results),
@@ -561,4 +559,3 @@ class JiraRestClient:
 
         _walk(adf)
         return " ".join(parts).strip()
-

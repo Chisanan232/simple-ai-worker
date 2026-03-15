@@ -207,6 +207,7 @@ _REVISE_PLAN_TASK_EXPECTED_OUTPUT: str = (
 # Worker: initial plan
 # ---------------------------------------------------------------------------
 
+
 def _create_initial_plan(
     ticket_id: str,
     source: str,
@@ -272,6 +273,7 @@ def _create_initial_plan(
 # ---------------------------------------------------------------------------
 # Worker: plan revision
 # ---------------------------------------------------------------------------
+
 
 def _revise_plan(
     ticket_id: str,
@@ -350,6 +352,7 @@ def _revise_plan(
 # Main job
 # ---------------------------------------------------------------------------
 
+
 def plan_and_notify_job(
     registry: "AgentRegistry",
     settings: "AppSettings",  # noqa: ARG001  (reserved for future use)
@@ -384,9 +387,7 @@ def plan_and_notify_job(
         return
 
     if tracker_registry is None:
-        logger.warning(
-            "plan_and_notify_job: no TrackerRegistry provided — skipping."
-        )
+        logger.warning("plan_and_notify_job: no TrackerRegistry provided — skipping.")
         return
 
     # Verify dev_agent is accessible before doing any REST calls.
@@ -394,8 +395,7 @@ def plan_and_notify_job(
         registry["dev_agent"]
     except KeyError:
         logger.error(
-            "plan_and_notify_job: 'dev_agent' not found in registry — "
-            "available ids: %s. Skipping run.",
+            "plan_and_notify_job: 'dev_agent' not found in registry — " "available ids: %s. Skipping run.",
             registry.agent_ids(),
         )
         return
@@ -463,9 +463,7 @@ def plan_and_notify_job(
 
             future.add_done_callback(_on_done)
     else:
-        logger.debug(
-            "plan_and_notify_job: OPEN_FOR_DEV status not configured — skipping Mode 1."
-        )
+        logger.debug("plan_and_notify_job: OPEN_FOR_DEV status not configured — skipping Mode 1.")
 
     # ------------------------------------------------------------------
     # Mode 2: Plan revision for IN_PLANNING tickets with new comments
@@ -535,9 +533,7 @@ def plan_and_notify_job(
 
             # Count existing plan versions by counting AI revision comments
             # (rough heuristic: one revision per batch of new comments).
-            existing_revisions = len([
-                c for c in comments if c.created_at <= watermark
-            ])
+            existing_revisions = len([c for c in comments if c.created_at <= watermark])
             version = existing_revisions + 2  # v1 = initial, v2+ = revisions
 
             comments_text = "\n".join(
@@ -549,8 +545,7 @@ def plan_and_notify_job(
 
             _in_planning_tickets.add(tid)
             logger.info(
-                "plan_and_notify_job: dispatching plan-revision crew (v%d) for ticket %s (%s) "
-                "— %d new comment(s).",
+                "plan_and_notify_job: dispatching plan-revision crew (v%d) for ticket %s (%s) " "— %d new comment(s).",
                 version,
                 tid,
                 ticket.source,
@@ -577,7 +572,4 @@ def plan_and_notify_job(
 
             rev_future.add_done_callback(_on_rev_done)
     else:
-        logger.debug(
-            "plan_and_notify_job: IN_PLANNING status not configured — skipping Mode 2."
-        )
-
+        logger.debug("plan_and_notify_job: IN_PLANNING status not configured — skipping Mode 2.")
