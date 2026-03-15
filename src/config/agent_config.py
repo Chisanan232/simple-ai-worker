@@ -447,4 +447,3 @@ class AgentTeamConfig(BaseModel):
             if agent.id == agent_id and agent.workflow is not None:
                 return agent.workflow.to_workflow_config()
         return None
-

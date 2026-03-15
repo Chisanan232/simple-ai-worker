@@ -13,7 +13,7 @@ Tests cover:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -22,6 +22,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 # Helpers / shared fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_in_thread_event(
     channel_id: str = "C001",
@@ -76,6 +77,7 @@ def mock_registry_missing_dev_agent() -> MagicMock:
 # ---------------------------------------------------------------------------
 # INT-DH-01 — ACK message posted before executor.submit()
 # ---------------------------------------------------------------------------
+
 
 class TestDevHandlerAcknowledgement:
     def test_posts_ack_before_submit(
@@ -133,6 +135,7 @@ class TestDevHandlerAcknowledgement:
 # INT-DH-02 — Top-level mention (no thread_ts) → no executor.submit()
 # ---------------------------------------------------------------------------
 
+
 class TestDevHandlerTopLevelRejection:
     def test_rejects_top_level_mention(
         self,
@@ -162,6 +165,7 @@ class TestDevHandlerTopLevelRejection:
 # ---------------------------------------------------------------------------
 # INT-DH-03 — [dev] tag routing (via router)
 # ---------------------------------------------------------------------------
+
 
 class TestDevTagRouting:
     def test_dev_tag_routed_to_dev_handler(
@@ -223,6 +227,7 @@ class TestDevTagRouting:
 # We capture the Task() that gets constructed inside _run_dev_thread_summary_crew.
 # ---------------------------------------------------------------------------
 
+
 class TestDevTaskDescriptionContent:
     """
     Exercises the task description built by _run_dev_thread_summary_crew.
@@ -249,6 +254,7 @@ class TestDevTaskDescriptionContent:
             mock_cb.build.return_value = mock_crew
 
             with patch("src.slack_app.handlers.dev.Task") as mock_task_cls:
+
                 def capture_task(**kwargs: object) -> MagicMock:
                     captured_descriptions.append(str(kwargs.get("description", "")))
                     t = MagicMock()
@@ -266,59 +272,44 @@ class TestDevTaskDescriptionContent:
 
         return captured_descriptions
 
-    def test_task_contains_channel_and_thread_ts(
-        self, mock_registry_with_dev_agent: MagicMock
-    ) -> None:
+    def test_task_contains_channel_and_thread_ts(self, mock_registry_with_dev_agent: MagicMock) -> None:
         """INT-DH-04: Task description contains channel_id and thread_ts."""
         descs = self._invoke_background_fn("C999", "111.222", mock_registry_with_dev_agent)
         assert any("C999" in d for d in descs), "channel_id 'C999' not in task description"
         assert any("111.222" in d for d in descs), "thread_ts '111.222' not in task description"
 
-    def test_task_instructs_get_messages(
-        self, mock_registry_with_dev_agent: MagicMock
-    ) -> None:
+    def test_task_instructs_get_messages(self, mock_registry_with_dev_agent: MagicMock) -> None:
         """INT-DH-05: Task description instructs slack/get_messages."""
         descs = self._invoke_background_fn("C001", "100.200", mock_registry_with_dev_agent)
         assert any("slack/get_messages" in d for d in descs), "slack/get_messages not in task description"
 
-    def test_task_instructs_add_comment(
-        self, mock_registry_with_dev_agent: MagicMock
-    ) -> None:
+    def test_task_instructs_add_comment(self, mock_registry_with_dev_agent: MagicMock) -> None:
         """INT-DH-06: Task description references jira/add_comment or clickup/add_comment."""
         descs = self._invoke_background_fn("C001", "100.200", mock_registry_with_dev_agent)
         assert any(
-            "jira/add_comment" in d or "clickup/add_comment" in d
-            for d in descs
+            "jira/add_comment" in d or "clickup/add_comment" in d for d in descs
         ), "Neither jira/add_comment nor clickup/add_comment in task description"
 
-    def test_task_contains_slack_permalink_format(
-        self, mock_registry_with_dev_agent: MagicMock
-    ) -> None:
+    def test_task_contains_slack_permalink_format(self, mock_registry_with_dev_agent: MagicMock) -> None:
         """INT-DH-07: Task description includes slack.com/archives permalink format."""
         descs = self._invoke_background_fn("C123", "555.666", mock_registry_with_dev_agent)
         assert any("slack.com/archives" in d for d in descs), "Slack permalink format not in task description"
 
-    def test_task_instructs_ask_and_stop_when_no_ticket_id(
-        self, mock_registry_with_dev_agent: MagicMock
-    ) -> None:
+    def test_task_instructs_ask_and_stop_when_no_ticket_id(self, mock_registry_with_dev_agent: MagicMock) -> None:
         """INT-DH-08: Task description instructs ask + STOP if no ticket ID (BR-6)."""
         descs = self._invoke_background_fn("C001", "100.200", mock_registry_with_dev_agent)
         full_text = " ".join(descs).upper()
         assert "STOP" in full_text, "Task description must instruct STOP when no ticket ID found (BR-6)"
 
-    def test_task_forbids_creating_new_ticket(
-        self, mock_registry_with_dev_agent: MagicMock
-    ) -> None:
+    def test_task_forbids_creating_new_ticket(self, mock_registry_with_dev_agent: MagicMock) -> None:
         """INT-DH-09: Task description contains 'Do NOT create any new ticket'."""
         descs = self._invoke_background_fn("C001", "100.200", mock_registry_with_dev_agent)
         full_text = " ".join(descs)
-        assert "Do NOT create" in full_text or "do not create" in full_text.lower(), (
-            "Task description must forbid ticket creation"
-        )
+        assert (
+            "Do NOT create" in full_text or "do not create" in full_text.lower()
+        ), "Task description must forbid ticket creation"
 
-    def test_task_forbids_state_transition(
-        self, mock_registry_with_dev_agent: MagicMock
-    ) -> None:
+    def test_task_forbids_state_transition(self, mock_registry_with_dev_agent: MagicMock) -> None:
         """INT-DH-10: Task description contains 'Do NOT transition the ticket state'."""
         descs = self._invoke_background_fn("C001", "100.200", mock_registry_with_dev_agent)
         full_text = " ".join(descs)
@@ -330,6 +321,7 @@ class TestDevTaskDescriptionContent:
 # ---------------------------------------------------------------------------
 # INT-DH-11 — Crew exception → say() error message
 # ---------------------------------------------------------------------------
+
 
 class TestDevHandlerErrorHandling:
     def test_posts_error_on_crew_exception(
@@ -382,5 +374,3 @@ class TestDevHandlerErrorHandling:
         mock_say.assert_called_once()
         call_text = str(mock_say.call_args)
         assert "❌" in call_text or "error" in call_text.lower() or "Configuration" in call_text
-
-

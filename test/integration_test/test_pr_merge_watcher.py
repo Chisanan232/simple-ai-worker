@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.ticket.models import PRRecord
-from src.ticket.workflow import WorkflowConfig, WorkflowOperation
+from src.ticket.workflow import WorkflowConfig
 
 pytestmark = pytest.mark.integration
 
@@ -28,6 +28,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_settings(timeout: int = 300) -> MagicMock:
     s = MagicMock()
@@ -54,12 +55,14 @@ def _make_pr_record(
 def _mock_pr_status(is_merged: bool = False, approval_count: int = 0) -> str:
     """Return JSON that a fake crew would output for PR status."""
     import json
+
     return json.dumps({"is_merged": is_merged, "approval_count": approval_count, "pr_url": "https://github.com/x"})
 
 
 # ---------------------------------------------------------------------------
 # INT-PR-01 — Merge triggered with approval after timeout
 # ---------------------------------------------------------------------------
+
 
 class TestMergeTriggered:
     def test_merge_triggered_with_approval_after_timeout(
@@ -100,6 +103,7 @@ class TestMergeTriggered:
 # INT-PR-02 — No merge without approval (BR-2)
 # ---------------------------------------------------------------------------
 
+
 class TestNoMergeWithoutApproval:
     def test_no_merge_without_approval(
         self,
@@ -138,6 +142,7 @@ class TestNoMergeWithoutApproval:
 # INT-PR-03 — No merge before timeout
 # ---------------------------------------------------------------------------
 
+
 class TestNoMergeBeforeTimeout:
     def test_no_merge_before_timeout(
         self,
@@ -173,6 +178,7 @@ class TestNoMergeBeforeTimeout:
 # ---------------------------------------------------------------------------
 # INT-PR-04 — Already-merged PR
 # ---------------------------------------------------------------------------
+
 
 class TestAlreadyMergedPR:
     def test_handles_already_merged_pr(
@@ -210,6 +216,7 @@ class TestAlreadyMergedPR:
 # ---------------------------------------------------------------------------
 # INT-PR-05 — Entry cleared after merge
 # ---------------------------------------------------------------------------
+
 
 class TestEntryClearedAfterMerge:
     def test_entry_cleared_after_merge(
@@ -249,6 +256,7 @@ class TestEntryClearedAfterMerge:
 # INT-PR-06 — Mixed PRs: only approved+stale merged
 # ---------------------------------------------------------------------------
 
+
 class TestMixedPRs:
     def test_only_approved_stale_merged(
         self,
@@ -278,6 +286,7 @@ class TestMixedPRs:
             patch("src.scheduler.jobs.pr_merge_watcher._run_pr_status_check") as mock_status,
             patch("src.scheduler.jobs.pr_merge_watcher._run_pr_merge") as mock_merge,
         ):
+
             def status_side_effect(pr_url: str, dev_agent: object) -> dict:
                 return pr_statuses[pr_url]
 
@@ -299,6 +308,7 @@ class TestMixedPRs:
 # ---------------------------------------------------------------------------
 # INT-PR-07 — Team B mark_complete status
 # ---------------------------------------------------------------------------
+
 
 class TestTeamBMarkComplete:
     def test_uses_team_b_mark_complete_status(
@@ -333,4 +343,3 @@ class TestTeamBMarkComplete:
         # Third positional arg is complete_status.
         complete_status_used = mock_merge.call_args[0][2]
         assert complete_status_used == "Finished"
-

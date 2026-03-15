@@ -105,10 +105,7 @@ class ClickUpTracker(TicketTracker):
         # Belt-and-suspenders BR-3 guard: the REST client already excludes
         # the skip_status server-side, but we double-check here in case of
         # case-sensitivity differences or partial matches.
-        return [
-            r for r in records
-            if not self._workflow.matches(WorkflowOperation.SKIP_REJECTED, r.raw_status)
-        ]
+        return [r for r in records if not self._workflow.matches(WorkflowOperation.SKIP_REJECTED, r.raw_status)]
 
     def transition(
         self,
@@ -125,10 +122,7 @@ class ClickUpTracker(TicketTracker):
             f"Use clickup/update_task to update task '{ticket_id}' "
             f"setting status to '{target_status}'. Confirm the update was successful."
         )
-        expected_output = (
-            f"Confirmation that task '{ticket_id}' was updated "
-            f"to status '{target_status}'."
-        )
+        expected_output = f"Confirmation that task '{ticket_id}' was updated " f"to status '{target_status}'."
         self._run_crew_task(description, expected_output)
         logger.info(
             "ClickUpTracker: transitioned %s to '%s' (%s).",

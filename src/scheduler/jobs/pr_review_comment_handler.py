@@ -120,9 +120,7 @@ def _check_pr_review_status(
     import json
 
     description = _PR_REVIEW_STATUS_TASK_TEMPLATE.format(pr_url=pr_url)
-    expected_output = (
-        'JSON: {"has_changes_requested": false, "unresolved_comment_count": 0, "comments": []}'
-    )
+    expected_output = 'JSON: {"has_changes_requested": false, "unresolved_comment_count": 0, "comments": []}'
     task = Task(description=description, expected_output=expected_output, agent=dev_agent)
     crew = CrewBuilder.build(agents=[dev_agent], tasks=[task], process="sequential")
 
@@ -134,9 +132,7 @@ def _check_pr_review_status(
             raw = "\n".join(ln for ln in lines if not ln.strip().startswith("```"))
         return json.loads(raw)
     except Exception:  # noqa: BLE001
-        logger.exception(
-            "pr_review_comment_handler: failed to fetch review status for %s.", pr_url
-        )
+        logger.exception("pr_review_comment_handler: failed to fetch review status for %s.", pr_url)
         return None
 
 
@@ -159,15 +155,12 @@ def _fix_review_comments(
     """
     try:
         if not comments:
-            logger.info(
-                "pr_review_comment_handler: no comments to fix for ticket %s.", ticket_id
-            )
+            logger.info("pr_review_comment_handler: no comments to fix for ticket %s.", ticket_id)
             return
 
         # Format the comment list for the task description.
         comments_text = "\n".join(
-            f"  [{i+1}] File: {c.get('path', 'unknown')}:{c.get('line', '?')} — "
-            f"{c.get('body', '(no body)')}"
+            f"  [{i+1}] File: {c.get('path', 'unknown')}:{c.get('line', '?')} — " f"{c.get('body', '(no body)')}"
             for i, c in enumerate(comments)
         )
 
@@ -200,15 +193,11 @@ def _fix_review_comments(
         )
 
     except Exception:  # noqa: BLE001
-        logger.exception(
-            "pr_review_comment_handler: fix crew failed for ticket %s.", ticket_id
-        )
+        logger.exception("pr_review_comment_handler: fix crew failed for ticket %s.", ticket_id)
 
     finally:
         _in_progress_comment_fixes.discard(ticket_id)
-        logger.debug(
-            "pr_review_comment_handler: fix guard cleared for ticket %s.", ticket_id
-        )
+        logger.debug("pr_review_comment_handler: fix guard cleared for ticket %s.", ticket_id)
 
 
 def pr_review_comment_handler_job(
@@ -240,9 +229,7 @@ def pr_review_comment_handler_job(
     try:
         dev_agent = registry["dev_agent"]
     except KeyError:
-        logger.error(
-            "pr_review_comment_handler_job: 'dev_agent' not found in registry — skipping run."
-        )
+        logger.error("pr_review_comment_handler_job: 'dev_agent' not found in registry — skipping run.")
         return
 
     for ticket_id, pr_url in list(_prs_under_review.items()):
@@ -300,4 +287,3 @@ def pr_review_comment_handler_job(
             comments,
             dev_agent,
         )
-

@@ -101,9 +101,7 @@ class TrackerRegistry:
                     "TrackerRegistry."
                 )
             project_key: Optional[str] = (
-                getattr(self._settings, "JIRA_PROJECT_KEY", None)
-                if self._settings is not None
-                else None
+                getattr(self._settings, "JIRA_PROJECT_KEY", None) if self._settings is not None else None
             )
             return JiraTracker(
                 self._workflow,
@@ -128,10 +126,7 @@ class TrackerRegistry:
                 self._clickup_client,
             )
 
-        raise ValueError(
-            f"Unknown ticket source: {source!r}. "
-            "Supported sources: 'jira', 'clickup'."
-        )
+        raise ValueError(f"Unknown ticket source: {source!r}. " "Supported sources: 'jira', 'clickup'.")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -160,11 +155,7 @@ class TrackerRegistry:
             )
             return None
 
-        api_token = (
-            token_field.get_secret_value()
-            if isinstance(token_field, SecretStr)
-            else str(token_field)
-        )
+        api_token = token_field.get_secret_value() if isinstance(token_field, SecretStr) else str(token_field)
         return ClickUpRestClient(api_token=api_token, list_id=str(list_id))
 
     @staticmethod
@@ -190,11 +181,7 @@ class TrackerRegistry:
             )
             return None
 
-        api_token = (
-            token_field.get_secret_value()
-            if isinstance(token_field, SecretStr)
-            else str(token_field)
-        )
+        api_token = token_field.get_secret_value() if isinstance(token_field, SecretStr) else str(token_field)
         return JiraRestClient(
             base_url=str(base_url),
             api_token=api_token,

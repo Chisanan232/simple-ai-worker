@@ -19,7 +19,6 @@ from src.ticket.jira_tracker import JiraTracker
 from src.ticket.rest_client import JiraRestClient, TicketFetchError
 from src.ticket.workflow import WorkflowConfig, WorkflowOperation
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -91,16 +90,18 @@ class TestFetchTicketsForOperation:
         tracker, mock_rest, _ = _make_parts([])
         tracker.fetch_tickets_for_operation(WorkflowOperation.SCAN_FOR_WORK)
         call_kwargs = mock_rest.search_issues.call_args
-        assert call_kwargs.kwargs.get("status") == "ACCEPTED" or \
-               (call_kwargs.args and call_kwargs.args[0] == "ACCEPTED")
+        assert call_kwargs.kwargs.get("status") == "ACCEPTED" or (
+            call_kwargs.args and call_kwargs.args[0] == "ACCEPTED"
+        )
 
     def test_passes_exclude_status_to_rest_client(self, _patch_task: MagicMock) -> None:
         """UNIT-JT-03: search_issues is called with the SKIP_REJECTED status string."""
         tracker, mock_rest, _ = _make_parts([])
         tracker.fetch_tickets_for_operation(WorkflowOperation.SCAN_FOR_WORK)
         call_kwargs = mock_rest.search_issues.call_args
-        assert call_kwargs.kwargs.get("exclude_status") == "REJECTED" or \
-               (len(call_kwargs.args) > 1 and call_kwargs.args[1] == "REJECTED")
+        assert call_kwargs.kwargs.get("exclude_status") == "REJECTED" or (
+            len(call_kwargs.args) > 1 and call_kwargs.args[1] == "REJECTED"
+        )
 
     def test_returns_empty_list_on_empty_api_response(self, _patch_task: MagicMock) -> None:
         """UNIT-JT-04: Empty list from REST client returns empty list."""
@@ -131,7 +132,7 @@ class TestFetchTicketsForOperation:
         """UNIT-JT-07: Belt-and-suspenders BR-3 — REJECTED items filtered post-fetch."""
         items = [
             {"id": "P-1", "title": "Good", "url": "", "status": "ACCEPTED"},
-            {"id": "P-2", "title": "Bad",  "url": "", "status": "REJECTED"},
+            {"id": "P-2", "title": "Bad", "url": "", "status": "REJECTED"},
         ]
         tracker, _, _ = _make_parts(items)
         result = tracker.fetch_tickets_for_operation(WorkflowOperation.SCAN_FOR_WORK)
@@ -156,9 +157,7 @@ class TestFetchTicketsForOperation:
     def test_ticket_fetch_error_propagates(self, _patch_task: MagicMock) -> None:
         """UNIT-JT-10: TicketFetchError from REST client propagates to caller."""
         tracker, mock_rest, _ = _make_parts()
-        mock_rest.search_issues.side_effect = TicketFetchError(
-            "JIRA 401", source="jira", status_code=401
-        )
+        mock_rest.search_issues.side_effect = TicketFetchError("JIRA 401", source="jira", status_code=401)
         with pytest.raises(TicketFetchError):
             tracker.fetch_tickets_for_operation(WorkflowOperation.SCAN_FOR_WORK)
 
@@ -244,4 +243,3 @@ class TestParseTicketRecordsFromApi:
         raw = json.dumps([{"id": "X-2", "title": "T", "url": "", "status": ""}])
         result = JiraTracker._parse_ticket_records(raw, source="jira")
         assert len(result) == 1 and result[0].id == "X-2"
-

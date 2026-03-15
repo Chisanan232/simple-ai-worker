@@ -218,4 +218,3 @@ class WorkflowConfig:
             for op, cfg in self._ops.items()
         )
         return f"WorkflowConfig({pairs})"
-

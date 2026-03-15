@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.ticket.models import PRRecord
-from src.ticket.workflow import WorkflowConfig, WorkflowOperation
-
+from src.ticket.workflow import WorkflowConfig
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -66,9 +65,11 @@ def _make_registry(dev_agent: MagicMock | None = None) -> MagicMock:
 # Fixture: clear shared state around every test
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def _clear_open_prs() -> None:  # type: ignore[return]
     import src.scheduler.jobs.scan_tickets as scan_mod
+
     scan_mod._open_prs.clear()
     scan_mod._prs_under_review.clear()
     yield
@@ -79,6 +80,7 @@ def _clear_open_prs() -> None:  # type: ignore[return]
 # ===========================================================================
 # UNIT-PMW-01: No-op when _open_prs is empty
 # ===========================================================================
+
 
 class TestNoOpenPrs:
     def test_returns_early_when_no_open_prs(self) -> None:
@@ -103,10 +105,12 @@ class TestNoOpenPrs:
 # UNIT-PMW-02: Returns early when workflow is None
 # ===========================================================================
 
+
 class TestNoWorkflow:
     def test_skips_run_when_no_workflow_provided(self, caplog: pytest.LogCaptureFixture) -> None:
         """UNIT-PMW-02: job logs a warning and returns when workflow=None."""
         import logging
+
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
@@ -126,18 +130,19 @@ class TestNoWorkflow:
             )
 
         mock_check.assert_not_called()
-        assert any("WorkflowConfig" in r.message or "workflow" in r.message.lower()
-                   for r in caplog.records)
+        assert any("WorkflowConfig" in r.message or "workflow" in r.message.lower() for r in caplog.records)
 
 
 # ===========================================================================
 # UNIT-PMW-03: Returns early when dev_agent missing from registry
 # ===========================================================================
 
+
 class TestMissingDevAgent:
     def test_skips_run_when_dev_agent_missing(self, caplog: pytest.LogCaptureFixture) -> None:
         """UNIT-PMW-03: job logs an error and returns when dev_agent not in registry."""
         import logging
+
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
@@ -163,6 +168,7 @@ class TestMissingDevAgent:
 # ===========================================================================
 # UNIT-PMW-04: No merge when PR has 0 approvals (BR-2)
 # ===========================================================================
+
 
 class TestNoMergeWithoutApproval:
     def test_no_merge_with_zero_approvals(self) -> None:
@@ -192,6 +198,7 @@ class TestNoMergeWithoutApproval:
 # UNIT-PMW-05: No merge before timeout elapsed
 # ===========================================================================
 
+
 class TestNoMergeBeforeTimeout:
     def test_no_merge_before_timeout(self) -> None:
         """UNIT-PMW-05: 1 approval but PR only 60s old, timeout=300 → no merge."""
@@ -220,6 +227,7 @@ class TestNoMergeBeforeTimeout:
 # UNIT-PMW-06: Merge triggered with ≥1 approval after timeout
 # ===========================================================================
 
+
 class TestMergeTriggered:
     def test_merge_triggered_with_approval_after_timeout(self) -> None:
         """UNIT-PMW-06: 1 approval + stale PR → _run_pr_merge called with COMPLETE status."""
@@ -227,9 +235,7 @@ class TestMergeTriggered:
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
         pr_url = "https://github.com/org/repo/pull/10"
-        scan_mod._open_prs["PROJ-4"] = _make_pr_record(
-            "PROJ-4", pr_url, age_seconds=310
-        )
+        scan_mod._open_prs["PROJ-4"] = _make_pr_record("PROJ-4", pr_url, age_seconds=310)
         registry = _make_registry()
 
         with (
@@ -255,6 +261,7 @@ class TestMergeTriggered:
 # ===========================================================================
 # UNIT-PMW-07: Already-merged PR only calls _run_pr_merge (no re-merge)
 # ===========================================================================
+
 
 class TestAlreadyMergedPR:
     def test_already_merged_pr_clears_entry(self) -> None:
@@ -290,6 +297,7 @@ class TestAlreadyMergedPR:
 # UNIT-PMW-08: Entry cleared from _open_prs after successful merge
 # ===========================================================================
 
+
 class TestEntryCleared:
     def test_entry_cleared_after_merge(self) -> None:
         """UNIT-PMW-08: After merge success, ticket removed from _open_prs and _prs_under_review."""
@@ -323,6 +331,7 @@ class TestEntryCleared:
 # UNIT-PMW-09: Entry NOT cleared when merge fails
 # ===========================================================================
 
+
 class TestEntryNotClearedOnFailure:
     def test_entry_kept_when_merge_fails(self) -> None:
         """UNIT-PMW-09: When _run_pr_merge returns False, entry stays in _open_prs."""
@@ -354,12 +363,12 @@ class TestEntryNotClearedOnFailure:
 # UNIT-PMW-10: Status check failure → entry skipped, not cleared
 # ===========================================================================
 
+
 class TestStatusCheckFailure:
-    def test_skips_pr_when_status_check_returns_none(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_skips_pr_when_status_check_returns_none(self, caplog: pytest.LogCaptureFixture) -> None:
         """UNIT-PMW-10: None from _run_pr_status_check → warning logged, entry kept."""
         import logging
+
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
@@ -388,23 +397,25 @@ class TestStatusCheckFailure:
 # UNIT-PMW-11: MARK_COMPLETE human_only raises PermissionError early
 # ===========================================================================
 
+
 class TestMarkCompleteHumanOnly:
-    def test_raises_permission_error_when_mark_complete_human_only(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_raises_permission_error_when_mark_complete_human_only(self, caplog: pytest.LogCaptureFixture) -> None:
         """UNIT-PMW-11: WorkflowConfig.MARK_COMPLETE human_only=True → logs error, skips."""
         import logging
+
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        misconfigured_workflow = WorkflowConfig({
-            "scan_for_work": {"status_value": "ACCEPTED", "human_only": True},
-            "skip_rejected": {"status_value": "REJECTED"},
-            "start_development": {"status_value": "IN PROGRESS"},
-            "open_for_review": {"status_value": "IN REVIEW"},
-            "mark_complete": {"status_value": "COMPLETE", "human_only": True},  # misconfigured!
-            "update_with_context": {"status_value": ""},
-        })
+        misconfigured_workflow = WorkflowConfig(
+            {
+                "scan_for_work": {"status_value": "ACCEPTED", "human_only": True},
+                "skip_rejected": {"status_value": "REJECTED"},
+                "start_development": {"status_value": "IN PROGRESS"},
+                "open_for_review": {"status_value": "IN REVIEW"},
+                "mark_complete": {"status_value": "COMPLETE", "human_only": True},  # misconfigured!
+                "update_with_context": {"status_value": ""},
+            }
+        )
 
         scan_mod._open_prs["PROJ-9"] = _make_pr_record(age_seconds=400)
         registry = _make_registry()
@@ -421,13 +432,16 @@ class TestMarkCompleteHumanOnly:
             )
 
         mock_check.assert_not_called()
-        assert any("human_only" in r.message or "MARK_COMPLETE" in r.message or "human" in r.message.lower()
-                   for r in caplog.records)
+        assert any(
+            "human_only" in r.message or "MARK_COMPLETE" in r.message or "human" in r.message.lower()
+            for r in caplog.records
+        )
 
 
 # ===========================================================================
 # UNIT-PMW-12: Mixed PRs — only stale approved one is merged
 # ===========================================================================
+
 
 class TestMixedPRs:
     def test_only_stale_approved_pr_is_merged(self) -> None:
@@ -435,9 +449,15 @@ class TestMixedPRs:
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        scan_mod._open_prs["PROJ-A"] = _make_pr_record("PROJ-A", "https://github.com/r/pull/100", age_seconds=310)  # approved + stale
-        scan_mod._open_prs["PROJ-B"] = _make_pr_record("PROJ-B", "https://github.com/r/pull/101", age_seconds=60)   # not stale
-        scan_mod._open_prs["PROJ-C"] = _make_pr_record("PROJ-C", "https://github.com/r/pull/102", age_seconds=310)  # no approval
+        scan_mod._open_prs["PROJ-A"] = _make_pr_record(
+            "PROJ-A", "https://github.com/r/pull/100", age_seconds=310
+        )  # approved + stale
+        scan_mod._open_prs["PROJ-B"] = _make_pr_record(
+            "PROJ-B", "https://github.com/r/pull/101", age_seconds=60
+        )  # not stale
+        scan_mod._open_prs["PROJ-C"] = _make_pr_record(
+            "PROJ-C", "https://github.com/r/pull/102", age_seconds=310
+        )  # no approval
 
         merge_calls: list = []
 
@@ -470,5 +490,3 @@ class TestMixedPRs:
         # Only PROJ-A qualifies (stale + approved)
         assert "PROJ-A" in merge_calls
         assert "PROJ-C" not in merge_calls  # 0 approvals
-
-

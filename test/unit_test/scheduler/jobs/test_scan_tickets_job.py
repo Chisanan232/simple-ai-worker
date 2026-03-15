@@ -15,7 +15,6 @@ from src.ticket.models import TicketRecord
 from src.ticket.rest_client import TicketFetchError
 from src.ticket.workflow import WorkflowConfig
 
-
 _WORKFLOW_CFG = {
     "scan_for_work": {"status_value": "ACCEPTED", "human_only": True},
     "skip_rejected": {"status_value": "REJECTED"},
@@ -87,9 +86,7 @@ class TestScanAndDispatchJob:
     def teardown_method(self) -> None:
         scan_module._in_progress_tickets.clear()
 
-    def test_skips_run_when_dev_agent_missing_from_registry(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_skips_run_when_dev_agent_missing_from_registry(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log an error and return early when 'dev_agent' is not in registry."""
         import logging
 
@@ -128,9 +125,7 @@ class TestScanAndDispatchJob:
 
     def test_dispatches_ticket_to_executor(self) -> None:
         """Job must submit one executor task per ready ticket returned by REST client."""
-        ticket = TicketRecord(
-            id="PROJ-1", source="jira", title="Fix login", url="https://x", raw_status="ACCEPTED"
-        )
+        ticket = TicketRecord(id="PROJ-1", source="jira", title="Fix login", url="https://x", raw_status="ACCEPTED")
         registry = _make_registry()
         settings = _make_settings()
         executor = MagicMock(spec=ThreadPoolExecutor)
@@ -157,9 +152,7 @@ class TestScanAndDispatchJob:
         """Job must not re-dispatch a ticket that is already in the in-progress guard."""
         scan_module._in_progress_tickets.add("PROJ-99")
 
-        ticket = TicketRecord(
-            id="PROJ-99", source="jira", title="Already running", url="", raw_status="ACCEPTED"
-        )
+        ticket = TicketRecord(id="PROJ-99", source="jira", title="Already running", url="", raw_status="ACCEPTED")
         registry = _make_registry()
         settings = _make_settings()
         executor = MagicMock(spec=ThreadPoolExecutor)
@@ -177,9 +170,7 @@ class TestScanAndDispatchJob:
 
     def test_adds_ticket_to_in_progress_guard_on_dispatch(self) -> None:
         """After dispatch, the ticket ID must appear in _in_progress_tickets."""
-        ticket = TicketRecord(
-            id="PROJ-42", source="clickup", title="Test task", url="", raw_status="ACCEPTED"
-        )
+        ticket = TicketRecord(id="PROJ-42", source="clickup", title="Test task", url="", raw_status="ACCEPTED")
         registry = _make_registry()
         settings = _make_settings()
         executor = MagicMock(spec=ThreadPoolExecutor)
@@ -200,9 +191,7 @@ class TestScanAndDispatchJob:
 
         assert "PROJ-42" in scan_module._in_progress_tickets
 
-    def test_handles_fetch_error_gracefully(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_handles_fetch_error_gracefully(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log an exception and continue when REST fetch raises TicketFetchError."""
         import logging
 
@@ -225,9 +214,7 @@ class TestScanAndDispatchJob:
 
         executor.submit.assert_not_called()
 
-    def test_handles_scanner_crew_exception(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_handles_scanner_crew_exception(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must log the exception and continue if a tracker raises unexpectedly."""
         import logging
 
@@ -255,15 +242,11 @@ class TestScanAndDispatchJob:
 
         executor.submit.assert_not_called()
 
-    def test_skips_ticket_entry_with_rejected_status(
-        self, caplog: pytest.LogCaptureFixture
-    ) -> None:
+    def test_skips_ticket_entry_with_rejected_status(self, caplog: pytest.LogCaptureFixture) -> None:
         """Job must skip ticket entries that have REJECTED raw_status (BR-3)."""
         import logging
 
-        ticket = TicketRecord(
-            id="PROJ-10", source="jira", title="Rejected ticket", url="", raw_status="REJECTED"
-        )
+        ticket = TicketRecord(id="PROJ-10", source="jira", title="Rejected ticket", url="", raw_status="REJECTED")
         registry = _make_registry()
         settings = _make_settings()
         executor = MagicMock(spec=ThreadPoolExecutor)
@@ -279,4 +262,3 @@ class TestScanAndDispatchJob:
             )
 
         executor.submit.assert_not_called()
-

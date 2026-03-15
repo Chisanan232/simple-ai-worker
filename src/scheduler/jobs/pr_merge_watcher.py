@@ -123,7 +123,7 @@ def _run_pr_status_check(
 
     description = _PR_STATUS_TASK_TEMPLATE.format(pr_url=pr_url)
     expected_output = (
-        'JSON with is_merged (bool) and approval_count (int): '
+        "JSON with is_merged (bool) and approval_count (int): "
         '{"is_merged": false, "approval_count": 1, "pr_url": "..."}'
     )
     task = Task(description=description, expected_output=expected_output, agent=dev_agent)
@@ -217,17 +217,14 @@ def pr_merge_watcher_job(
 
     if workflow is None:
         logger.warning(
-            "pr_merge_watcher_job: no WorkflowConfig provided — skipping run. "
-            "Pass workflow= to the job kwargs."
+            "pr_merge_watcher_job: no WorkflowConfig provided — skipping run. " "Pass workflow= to the job kwargs."
         )
         return
 
     try:
         dev_agent = registry["dev_agent"]
     except KeyError:
-        logger.error(
-            "pr_merge_watcher_job: 'dev_agent' not found in registry — skipping run."
-        )
+        logger.error("pr_merge_watcher_job: 'dev_agent' not found in registry — skipping run.")
         return
 
     timeout_seconds: int = getattr(settings, "PR_AUTO_MERGE_TIMEOUT_SECONDS", 300)
@@ -260,9 +257,7 @@ def pr_merge_watcher_job(
         # Fetch current PR state.
         status = _run_pr_status_check(pr_url, dev_agent)
         if status is None:
-            logger.warning(
-                "pr_merge_watcher: could not fetch status for PR %s — skipping.", pr_url
-            )
+            logger.warning("pr_merge_watcher: could not fetch status for PR %s — skipping.", pr_url)
             continue
 
         is_merged: bool = bool(status.get("is_merged", False))
@@ -282,8 +277,7 @@ def pr_merge_watcher_job(
 
         if approval_count == 0:
             logger.info(
-                "pr_merge_watcher: PR %s has 0 approvals — skipping (BR-2). "
-                "Will re-check next interval.",
+                "pr_merge_watcher: PR %s has 0 approvals — skipping (BR-2). " "Will re-check next interval.",
                 pr_url,
             )
             continue
@@ -291,8 +285,7 @@ def pr_merge_watcher_job(
         # approval_count >= 1 and not yet merged.
         if age_seconds < timeout_seconds:
             logger.debug(
-                "pr_merge_watcher: PR %s has %d approval(s) but timeout not yet elapsed "
-                "(%.0fs < %ds). Waiting.",
+                "pr_merge_watcher: PR %s has %d approval(s) but timeout not yet elapsed " "(%.0fs < %ds). Waiting.",
                 pr_url,
                 approval_count,
                 age_seconds,
@@ -315,7 +308,4 @@ def pr_merge_watcher_job(
     for ticket_id in tickets_to_clear:
         _open_prs.pop(ticket_id, None)
         _prs_under_review.pop(ticket_id, None)
-        logger.info(
-            "pr_merge_watcher: cleared watcher entries for ticket %s.", ticket_id
-        )
-
+        logger.info("pr_merge_watcher: cleared watcher entries for ticket %s.", ticket_id)

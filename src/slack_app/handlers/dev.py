@@ -207,9 +207,7 @@ def dev_handler(
 
     # Only act when the mention is inside an existing thread.
     if not event.get("thread_ts"):
-        logger.info(
-            "dev_handler: [dev] mention is not inside an existing thread — sending hint."
-        )
+        logger.info("dev_handler: [dev] mention is not inside an existing thread — sending hint.")
         say(text=_NOT_IN_THREAD_MSG, thread_ts=thread_ts)
         return
 
@@ -234,4 +232,3 @@ def dev_handler(
         say,
         registry,
     )
-

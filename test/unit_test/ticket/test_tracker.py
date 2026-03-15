@@ -11,7 +11,6 @@ Covers:
 from __future__ import annotations
 
 from typing import List
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -19,10 +18,10 @@ from src.ticket.models import TicketRecord
 from src.ticket.tracker import TicketTracker
 from src.ticket.workflow import WorkflowConfig, WorkflowOperation
 
-
 # ---------------------------------------------------------------------------
 # Minimal concrete subclass used only in this test module
 # ---------------------------------------------------------------------------
+
 
 class _ConcreteTracker(TicketTracker):
     """Minimal concrete implementation for ABC testing."""
@@ -67,11 +66,14 @@ class TestTicketTrackerABC:
 
     def test_subclass_missing_one_abstract_method_cannot_instantiate(self) -> None:
         """UNIT-TR-04: Subclass that omits any abstract method cannot be instantiated."""
+
         class _Incomplete(TicketTracker):
             def fetch_tickets_for_operation(self, operation: WorkflowOperation) -> List[TicketRecord]:
                 return []
+
             def transition(self, ticket_id: str, operation: WorkflowOperation) -> None:
                 pass
+
             # add_comment intentionally omitted
 
         with pytest.raises(TypeError):
@@ -88,4 +90,3 @@ class TestTicketTrackerABC:
         tracker = _ConcreteTracker(workflow=WorkflowConfig(_WORKFLOW_CFG))
         tracker.transition("PROJ-1", WorkflowOperation.START_DEVELOPMENT)
         tracker.add_comment("PROJ-1", "comment body")
-

@@ -66,8 +66,8 @@ _in_progress_tickets: Set[str] = set()
 # Shared PR tracking dicts — written after _execute_ticket opens a PR.
 # Read by pr_merge_watcher_job and pr_review_comment_handler_job.
 # ---------------------------------------------------------------------------
-_open_prs: Dict[str, PRRecord] = {}       # ticket_id → PRRecord
-_prs_under_review: Dict[str, str] = {}    # ticket_id → pr_url
+_open_prs: Dict[str, PRRecord] = {}  # ticket_id → PRRecord
+_prs_under_review: Dict[str, str] = {}  # ticket_id → pr_url
 
 
 def _build_dev_task_description(
@@ -209,8 +209,7 @@ def _execute_ticket(
             )
         else:
             logger.warning(
-                "_execute_ticket: no PR_URL found in crew output for ticket %s "
-                "(cannot register in watcher dicts).",
+                "_execute_ticket: no PR_URL found in crew output for ticket %s " "(cannot register in watcher dicts).",
                 ticket_id,
             )
 
@@ -286,8 +285,7 @@ def scan_and_dispatch_job(
             dev_agent = registry["dev_agent"]
         except KeyError:
             logger.error(
-                "scan_and_dispatch_job: 'dev_agent' not found in registry — "
-                "available ids: %s. Skipping run.",
+                "scan_and_dispatch_job: 'dev_agent' not found in registry — " "available ids: %s. Skipping run.",
                 registry.agent_ids(),
             )
             return
@@ -304,8 +302,7 @@ def scan_and_dispatch_job(
             registry["dev_agent"]
         except KeyError:
             logger.error(
-                "scan_and_dispatch_job: 'dev_agent' not found in registry — "
-                "available ids: %s. Skipping run.",
+                "scan_and_dispatch_job: 'dev_agent' not found in registry — " "available ids: %s. Skipping run.",
                 registry.agent_ids(),
             )
             return
@@ -333,8 +330,7 @@ def scan_and_dispatch_job(
         except ValueError:
             # REST client not configured for this source (missing env vars).
             logger.warning(
-                "scan_and_dispatch_job: source '%s' is not configured (missing "
-                "credentials or list ID) — skipping.",
+                "scan_and_dispatch_job: source '%s' is not configured (missing " "credentials or list ID) — skipping.",
                 source,
             )
 

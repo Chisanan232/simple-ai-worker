@@ -19,7 +19,6 @@ import pytest
 
 from src.ticket.workflow import OperationConfig, WorkflowConfig, WorkflowOperation
 
-
 # ---------------------------------------------------------------------------
 # Shared test config helpers
 # ---------------------------------------------------------------------------
@@ -342,4 +341,3 @@ class TestRepr:
         cfg = WorkflowConfig(_TEAM_A)
         r = repr(cfg)
         assert "human-only" in r
-

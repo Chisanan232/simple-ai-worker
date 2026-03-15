@@ -111,10 +111,7 @@ class JiraTracker(TicketTracker):
 
         # Belt-and-suspenders BR-3 guard (JQL already excludes skip_status,
         # but we double-check for case-sensitivity edge cases).
-        return [
-            r for r in records
-            if not self._workflow.matches(WorkflowOperation.SKIP_REJECTED, r.raw_status)
-        ]
+        return [r for r in records if not self._workflow.matches(WorkflowOperation.SKIP_REJECTED, r.raw_status)]
 
     def transition(
         self,
@@ -131,10 +128,7 @@ class JiraTracker(TicketTracker):
             f"Use jira/transition_issue to transition ticket '{ticket_id}' "
             f"to status '{target_status}'. Confirm the transition was successful."
         )
-        expected_output = (
-            f"Confirmation that ticket '{ticket_id}' was transitioned "
-            f"to '{target_status}'."
-        )
+        expected_output = f"Confirmation that ticket '{ticket_id}' was transitioned " f"to '{target_status}'."
         self._run_crew_task(description, expected_output)
         logger.info(
             "JiraTracker: transitioned %s to '%s' (%s).",

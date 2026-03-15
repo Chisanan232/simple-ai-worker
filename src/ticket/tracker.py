@@ -100,4 +100,3 @@ class TicketTracker(ABC):
             comment:   The comment body (Markdown-formatted).
         """
         ...
-

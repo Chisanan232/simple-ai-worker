@@ -105,6 +105,7 @@ def _isolate_app_settings_from_env_file(monkeypatch: pytest.MonkeyPatch) -> None
 # WorkflowConfig fixtures — shared across unit, integration, and e2e tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def default_workflow_config() -> WorkflowConfig:
     """WorkflowConfig for Team A (standard status names used in examples)."""
@@ -148,4 +149,3 @@ def team_c_workflow_config() -> WorkflowConfig:
             "update_with_context": {"status_value": ""},
         }
     )
-

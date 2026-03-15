@@ -16,7 +16,6 @@ from pydantic import ValidationError
 
 from src.ticket.models import PRRecord, TicketRecord
 
-
 # ===========================================================================
 # TicketRecord
 # ===========================================================================

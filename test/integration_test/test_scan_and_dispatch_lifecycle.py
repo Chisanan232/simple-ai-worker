@@ -12,13 +12,13 @@ Covers:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.ticket.models import TicketRecord
 from src.ticket.rest_client import TicketFetchError
-from src.ticket.workflow import WorkflowConfig, WorkflowOperation
+from src.ticket.workflow import WorkflowConfig
 
 pytestmark = pytest.mark.integration
 
@@ -26,6 +26,7 @@ pytestmark = pytest.mark.integration
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_settings() -> MagicMock:
     settings = MagicMock()
@@ -64,6 +65,7 @@ def _make_tracker_registry(
 # ---------------------------------------------------------------------------
 # INT-SD-01 through INT-SD-03 — Direct REST API fetch (no scanner crew)
 # ---------------------------------------------------------------------------
+
 
 class TestDirectRestApiFetch:
     def test_calls_tracker_registry_for_jira(
@@ -106,9 +108,7 @@ class TestDirectRestApiFetch:
 
         mock_tr.get.assert_any_call("clickup")
 
-    def test_no_scanner_crew_built(
-        self, default_workflow_config: WorkflowConfig, mock_dev_registry: MagicMock
-    ) -> None:
+    def test_no_scanner_crew_built(self, default_workflow_config: WorkflowConfig, mock_dev_registry: MagicMock) -> None:
         """INT-SD-03: No scanner Task or CrewBuilder.build is called during scan step."""
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
@@ -139,9 +139,7 @@ class TestDirectRestApiFetch:
         """INT-SD-03b: TicketFetchError from jira is logged and clickup still dispatches."""
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
-        clickup_ticket = TicketRecord(
-            id="cu-1", source="clickup", title="Task A", url="", raw_status="ACCEPTED"
-        )
+        clickup_ticket = TicketRecord(id="cu-1", source="clickup", title="Task A", url="", raw_status="ACCEPTED")
         mock_tr = _make_tracker_registry(
             jira_error=TicketFetchError("JIRA down", source="jira"),
             clickup_tickets=[clickup_ticket],
@@ -204,6 +202,7 @@ class TestDirectRestApiFetch:
 # INT-SD-04 / INT-SD-05 — Dev task description injects START/REVIEW statuses
 # ---------------------------------------------------------------------------
 
+
 class TestDevTaskDescription:
     def test_dev_task_injects_start_development_status(self) -> None:
         """INT-SD-04: dev task description contains 'Doing' (Team B start_development)."""
@@ -241,22 +240,16 @@ class TestDevTaskDescription:
         assert "PR Raised" in desc
         assert "IN REVIEW" not in desc
 
-    def test_dev_task_instructs_start_development_first(
-        self, default_workflow_config: WorkflowConfig
-    ) -> None:
+    def test_dev_task_instructs_start_development_first(self, default_workflow_config: WorkflowConfig) -> None:
         """INT-SD-06: Dev task instructs transitioning to START_DEVELOPMENT first."""
         from src.scheduler.jobs.scan_tickets import _build_dev_task_description
 
-        desc = _build_dev_task_description(
-            "PROJ-10", "jira", "Implement feature", default_workflow_config
-        )
+        desc = _build_dev_task_description("PROJ-10", "jira", "Implement feature", default_workflow_config)
         # Check that the instruction to set IN PROGRESS FIRST is present.
         upper = desc.upper()
         assert "FIRST" in upper or "VERY FIRST" in upper or "IMMEDIATELY" in upper
 
-    def test_dev_task_contains_pr_url_instruction(
-        self, default_workflow_config: WorkflowConfig
-    ) -> None:
+    def test_dev_task_contains_pr_url_instruction(self, default_workflow_config: WorkflowConfig) -> None:
         """Dev task instructs agent to output PR_URL: line."""
         from src.scheduler.jobs.scan_tickets import _build_dev_task_description
 
@@ -268,6 +261,7 @@ class TestDevTaskDescription:
 # INT-SD-07 — Dispatch guard skips REJECTED tickets
 # ---------------------------------------------------------------------------
 
+
 class TestDispatchRejectedGuard:
     def test_dispatch_guard_skips_rejected_ticket(
         self,
@@ -275,12 +269,15 @@ class TestDispatchRejectedGuard:
         mock_dev_registry: MagicMock,
     ) -> None:
         """INT-SD-07: scan_and_dispatch_job skips tickets with REJECTED raw_status (BR-3)."""
-        from src.ticket.models import TicketRecord
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
+        from src.ticket.models import TicketRecord
 
         rejected_ticket = TicketRecord(
-            id="PROJ-99", source="jira", title="Rejected ticket",
-            url="", raw_status="REJECTED",
+            id="PROJ-99",
+            source="jira",
+            title="Rejected ticket",
+            url="",
+            raw_status="REJECTED",
         )
         mock_tr = _make_tracker_registry(jira_tickets=[rejected_ticket])
         executor = MagicMock(spec=ThreadPoolExecutor)
@@ -304,6 +301,7 @@ class TestDispatchRejectedGuard:
 # ---------------------------------------------------------------------------
 # INT-SD-08 / INT-SD-09 — PR registration after _execute_ticket
 # ---------------------------------------------------------------------------
+
 
 class TestPRRegistration:
     def test_execute_ticket_registers_pr_in_open_prs(
@@ -373,6 +371,7 @@ class TestPRRegistration:
 # INT-SD-10 — Double-dispatch prevention guard
 # ---------------------------------------------------------------------------
 
+
 class TestDoubleDispatchPrevention:
     def test_dispatch_guard_prevents_double_dispatch(
         self,
@@ -380,16 +379,19 @@ class TestDoubleDispatchPrevention:
         mock_dev_registry: MagicMock,
     ) -> None:
         """INT-SD-10: ticket already in _in_progress_tickets is not re-dispatched."""
-        from src.ticket.models import TicketRecord
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
+        from src.ticket.models import TicketRecord
 
         # Pre-populate the in-progress guard.
         scan_mod._in_progress_tickets.add("PROJ-99")
 
         in_progress_ticket = TicketRecord(
-            id="PROJ-99", source="jira", title="Already in progress",
-            url="", raw_status="ACCEPTED",
+            id="PROJ-99",
+            source="jira",
+            title="Already in progress",
+            url="",
+            raw_status="ACCEPTED",
         )
         mock_tr = _make_tracker_registry(jira_tickets=[in_progress_ticket])
         executor = MagicMock(spec=ThreadPoolExecutor)
@@ -408,7 +410,3 @@ class TestDoubleDispatchPrevention:
             )
 
         executor.submit.assert_not_called()
-
-
-
-

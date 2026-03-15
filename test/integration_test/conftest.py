@@ -11,7 +11,7 @@ Provides:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -77,8 +77,8 @@ def dev_agent_state_reset() -> None:  # type: ignore[return]
     in-memory dicts used by scan_tickets, pr_merge_watcher, and
     pr_review_comment_handler.
     """
-    import src.scheduler.jobs.scan_tickets as scan_mod
     import src.scheduler.jobs.pr_review_comment_handler as review_mod
+    import src.scheduler.jobs.scan_tickets as scan_mod
 
     # Clear all shared collections before the test.
     scan_mod._in_progress_tickets.clear()
@@ -93,4 +93,3 @@ def dev_agent_state_reset() -> None:  # type: ignore[return]
     scan_mod._open_prs.clear()
     scan_mod._prs_under_review.clear()
     review_mod._in_progress_comment_fixes.clear()
-

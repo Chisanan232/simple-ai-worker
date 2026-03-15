@@ -24,7 +24,6 @@ from src.ticket.registry import TrackerRegistry
 from src.ticket.rest_client import ClickUpRestClient, JiraRestClient
 from src.ticket.workflow import WorkflowConfig
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -164,4 +163,3 @@ class TestTrackerRegistryGet:
         registry, _, _, _ = _make_registry()
         tracker = registry.get("clickup")
         assert tracker._rest_client is registry._clickup_client
-

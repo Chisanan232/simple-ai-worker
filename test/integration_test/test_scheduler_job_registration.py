@@ -19,6 +19,7 @@ pytestmark = pytest.mark.integration
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_runner(interval: int = 60) -> "SchedulerRunner":  # type: ignore[name-defined]
     from src.scheduler.runner import SchedulerRunner
     from src.ticket.workflow import WorkflowConfig
@@ -51,6 +52,7 @@ def _make_runner(interval: int = 60) -> "SchedulerRunner":  # type: ignore[name-
 # INT-SCH-01 — All Phase 6 + Phase 8 jobs registered
 # ---------------------------------------------------------------------------
 
+
 class TestAllJobsRegistered:
     def test_all_phase8_jobs_registered(self) -> None:
         """INT-SCH-01: All expected job IDs are present after runner.start()."""
@@ -66,9 +68,7 @@ class TestAllJobsRegistered:
                 "pr_merge_watcher",
                 "pr_review_comment_handler",
             }
-            assert expected.issubset(job_ids), (
-                f"Missing jobs: {expected - job_ids}. Registered: {job_ids}"
-            )
+            assert expected.issubset(job_ids), f"Missing jobs: {expected - job_ids}. Registered: {job_ids}"
         finally:
             runner.stop(wait=False)
 
@@ -76,6 +76,7 @@ class TestAllJobsRegistered:
 # ---------------------------------------------------------------------------
 # INT-SCH-02 — PR merge watcher has 60s interval
 # ---------------------------------------------------------------------------
+
 
 class TestPRMergeWatcherInterval:
     def test_pr_merge_watcher_has_60s_interval(self) -> None:
@@ -89,9 +90,7 @@ class TestPRMergeWatcherInterval:
             # APScheduler IntervalTrigger stores interval in trigger.interval.total_seconds()
             trigger = job.trigger
             interval_seconds = trigger.interval.total_seconds()
-            assert interval_seconds == 60, (
-                f"Expected pr_merge_watcher interval=60s, got {interval_seconds}s"
-            )
+            assert interval_seconds == 60, f"Expected pr_merge_watcher interval=60s, got {interval_seconds}s"
         finally:
             runner.stop(wait=False)
 
@@ -99,6 +98,7 @@ class TestPRMergeWatcherInterval:
 # ---------------------------------------------------------------------------
 # INT-SCH-03 — PR review comment handler uses settings.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS
 # ---------------------------------------------------------------------------
+
 
 class TestPRCommentHandlerInterval:
     def test_pr_comment_handler_has_configured_interval(self) -> None:
@@ -112,9 +112,7 @@ class TestPRCommentHandlerInterval:
             job = jobs["pr_review_comment_handler"]
             trigger = job.trigger
             interval_seconds = trigger.interval.total_seconds()
-            assert interval_seconds == 120, (
-                f"Expected pr_review_comment_handler interval=120s, got {interval_seconds}s"
-            )
+            assert interval_seconds == 120, f"Expected pr_review_comment_handler interval=120s, got {interval_seconds}s"
         finally:
             runner.stop(wait=False)
 
@@ -129,4 +127,3 @@ class TestPRCommentHandlerInterval:
             assert job_ids == {"hello_world"}
         finally:
             runner.stop(wait=False)
-

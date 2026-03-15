@@ -109,14 +109,10 @@ class ClickUpRestClient:
     def __init__(self, api_token: str, list_id: str) -> None:
         if not api_token:
             raise ValueError(
-                "ClickUpRestClient: api_token must not be empty. "
-                "Set MCP_CLICKUP_TOKEN in your .env file."
+                "ClickUpRestClient: api_token must not be empty. " "Set MCP_CLICKUP_TOKEN in your .env file."
             )
         if not list_id:
-            raise ValueError(
-                "ClickUpRestClient: list_id must not be empty. "
-                "Set CLICKUP_LIST_ID in your .env file."
-            )
+            raise ValueError("ClickUpRestClient: list_id must not be empty. " "Set CLICKUP_LIST_ID in your .env file.")
         self._api_token = api_token
         self._list_id = list_id
 
@@ -161,9 +157,7 @@ class ClickUpRestClient:
                     "page": str(page),
                     "include_closed": "false",
                 }
-                logger.debug(
-                    "ClickUpRestClient: GET %s page=%d status=%r", url, page, status
-                )
+                logger.debug("ClickUpRestClient: GET %s page=%d status=%r", url, page, status)
                 try:
                     response = client.get(url, headers=headers, params=params)
                     response.raise_for_status()
@@ -182,9 +176,7 @@ class ClickUpRestClient:
 
                 data = response.json()
                 tasks: list = data.get("tasks", [])
-                logger.debug(
-                    "ClickUpRestClient: page=%d returned %d task(s).", page, len(tasks)
-                )
+                logger.debug("ClickUpRestClient: page=%d returned %d task(s).", page, len(tasks))
 
                 for task in tasks:
                     raw_status = self._extract_status(task)
@@ -267,20 +259,11 @@ class JiraRestClient:
 
     def __init__(self, base_url: str, api_token: str, email: str) -> None:
         if not base_url:
-            raise ValueError(
-                "JiraRestClient: base_url must not be empty. "
-                "Set ATLASSIAN_URL in your .env file."
-            )
+            raise ValueError("JiraRestClient: base_url must not be empty. " "Set ATLASSIAN_URL in your .env file.")
         if not api_token:
-            raise ValueError(
-                "JiraRestClient: api_token must not be empty. "
-                "Set MCP_JIRA_TOKEN in your .env file."
-            )
+            raise ValueError("JiraRestClient: api_token must not be empty. " "Set MCP_JIRA_TOKEN in your .env file.")
         if not email:
-            raise ValueError(
-                "JiraRestClient: email must not be empty. "
-                "Set ATLASSIAN_EMAIL in your .env file."
-            )
+            raise ValueError("JiraRestClient: email must not be empty. " "Set ATLASSIAN_EMAIL in your .env file.")
         self._base_url = base_url.rstrip("/")
         self._email = email
         self._api_token = api_token
@@ -317,9 +300,7 @@ class JiraRestClient:
         Raises:
             TicketFetchError: On any non-2xx response or network error.
         """
-        jql = (
-            f'status = "{status}" AND status != "{exclude_status}"'
-        )
+        jql = f'status = "{status}" AND status != "{exclude_status}"'
         if project_key:
             jql += f' AND project = "{project_key}"'
         jql += " ORDER BY created ASC"
@@ -342,16 +323,13 @@ class JiraRestClient:
                     "maxResults": str(_JIRA_PAGE_SIZE),
                     "fields": "summary,status",
                 }
-                logger.debug(
-                    "JiraRestClient: GET %s startAt=%d jql=%r", url, start_at, jql
-                )
+                logger.debug("JiraRestClient: GET %s startAt=%d jql=%r", url, start_at, jql)
                 try:
                     response = client.get(url, headers=headers, params=params)
                     response.raise_for_status()
                 except httpx.HTTPStatusError as exc:
                     raise TicketFetchError(
-                        f"JIRA API returned {exc.response.status_code}: "
-                        f"{exc.response.text[:200]}",
+                        f"JIRA API returned {exc.response.status_code}: " f"{exc.response.text[:200]}",
                         source="jira",
                         status_code=exc.response.status_code,
                     ) from exc
@@ -411,4 +389,3 @@ class JiraRestClient:
             "url": f"{base_url}/browse/{key}" if key else "",
             "status": raw_status,
         }
-
