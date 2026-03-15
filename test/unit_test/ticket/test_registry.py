@@ -1,5 +1,5 @@
 """
-Unit tests for :mod:`src.ticket.registry` (UNIT-TR-01 through UNIT-TR-08).
+Unit tests for :mod:`src.ticket.registry` (UNIT-TR-01 through UNIT-TR-10).
 
 Covers:
 - get("jira")     → returns JiraTracker instance
@@ -8,6 +8,8 @@ Covers:
 - Returned trackers share the same WorkflowConfig
 - Each call to get() returns a fresh tracker instance
 - Tracker instances are bound to the correct dev_agent and crew_builder
+- REST clients are injected into the trackers
+- get() raises ValueError when REST client is not available (missing config)
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import pytest
 from src.ticket.clickup_tracker import ClickUpTracker
 from src.ticket.jira_tracker import JiraTracker
 from src.ticket.registry import TrackerRegistry
+from src.ticket.rest_client import ClickUpRestClient, JiraRestClient
 from src.ticket.workflow import WorkflowConfig
 
 
@@ -37,14 +40,21 @@ _WORKFLOW_CFG = {
 
 
 def _make_registry() -> tuple[TrackerRegistry, WorkflowConfig, MagicMock, MagicMock]:
+    """Build a TrackerRegistry with mock REST clients injected directly."""
     workflow = WorkflowConfig(_WORKFLOW_CFG)
     dev_agent = MagicMock()
     crew_builder = MagicMock()
+
+    # Build with no settings — inject pre-built mock REST clients instead.
     registry = TrackerRegistry(
         workflow=workflow,
         dev_agent=dev_agent,
         crew_builder=crew_builder,
+        settings=None,
     )
+    # Inject mock REST clients directly so get() can build trackers.
+    registry._clickup_client = MagicMock(spec=ClickUpRestClient)
+    registry._jira_client = MagicMock(spec=JiraRestClient)
     return registry, workflow, dev_agent, crew_builder
 
 
@@ -116,6 +126,42 @@ class TestTrackerRegistryGet:
         with pytest.raises(ValueError) as exc_info:
             registry.get("asana")
         msg = str(exc_info.value)
-        # Message should guide users to valid options
         assert "jira" in msg or "clickup" in msg
+
+    def test_get_jira_raises_when_jira_client_not_configured(self) -> None:
+        """UNIT-REG-11: get('jira') raises ValueError when jira REST client is None."""
+        workflow = WorkflowConfig(_WORKFLOW_CFG)
+        registry = TrackerRegistry(
+            workflow=workflow,
+            dev_agent=MagicMock(),
+            crew_builder=MagicMock(),
+            settings=None,
+        )
+        # _jira_client is None (no settings provided, no manual injection)
+        with pytest.raises(ValueError, match="JiraRestClient"):
+            registry.get("jira")
+
+    def test_get_clickup_raises_when_clickup_client_not_configured(self) -> None:
+        """UNIT-REG-12: get('clickup') raises ValueError when clickup REST client is None."""
+        workflow = WorkflowConfig(_WORKFLOW_CFG)
+        registry = TrackerRegistry(
+            workflow=workflow,
+            dev_agent=MagicMock(),
+            crew_builder=MagicMock(),
+            settings=None,
+        )
+        with pytest.raises(ValueError, match="ClickUpRestClient"):
+            registry.get("clickup")
+
+    def test_jira_tracker_receives_rest_client(self) -> None:
+        """UNIT-REG-13: JiraTracker is injected with the registry's jira_client."""
+        registry, _, _, _ = _make_registry()
+        tracker = registry.get("jira")
+        assert tracker._rest_client is registry._jira_client
+
+    def test_clickup_tracker_receives_rest_client(self) -> None:
+        """UNIT-REG-14: ClickUpTracker is injected with the registry's clickup_client."""
+        registry, _, _, _ = _make_registry()
+        tracker = registry.get("clickup")
+        assert tracker._rest_client is registry._clickup_client
 
