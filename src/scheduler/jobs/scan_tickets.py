@@ -4,16 +4,18 @@ Scan-and-dispatch scheduler job (Phase 8b — WorkflowConfig integration).
 Provides :func:`scan_and_dispatch_job`, an APScheduler interval job that
 implements the **pull model** for Dev Agents:
 
-1. Build a short-lived "Scanner" Crew with the Dev Agent.
-2. Ask it to find all JIRA / ClickUp tickets in the ``SCAN_FOR_WORK``-configured
-   status (excluding ``SKIP_REJECTED``-configured status).
-3. For each returned ticket, apply the Python-level ``SKIP_REJECTED`` guard,
+1. Query JIRA and ClickUp **directly via REST API** (no LLM crew) through
+   :class:`~src.ticket.registry.TrackerRegistry` to find all tickets in the
+   ``SCAN_FOR_WORK``-configured status (excluding ``SKIP_REJECTED``-configured
+   status).  This replaces the previous scanner crew that called an LLM on
+   every poll cycle — saving token cost and latency.
+2. For each returned ticket, apply the Python-level ``SKIP_REJECTED`` guard,
    then submit a fresh Dev Crew execution to the bounded
    :class:`~concurrent.futures.ThreadPoolExecutor`.
-4. On success → the crew opens a GitHub PR, transitions to ``OPEN_FOR_REVIEW``
+3. On success → the crew opens a GitHub PR, transitions to ``OPEN_FOR_REVIEW``
    status, and notifies Slack.  The PR is registered in the shared
    ``_open_prs`` and ``_prs_under_review`` dicts for the watcher jobs.
-5. On failure → log the error and notify Slack.
+4. On failure → log the error and notify Slack.
 
 An in-memory *dispatch guard* (``set[str]``) prevents the same ticket from
 being dispatched twice while it is still being processed.
@@ -21,10 +23,9 @@ being dispatched twice while it is still being processed.
 Business Rules Enforced
 -----------------------
 - **BR-1:** The scan query targets the ``SCAN_FOR_WORK`` operation status
-  (human-only).  The task description explicitly forbids the LLM from writing
-  that status.
-- **BR-3:** Tickets in ``SKIP_REJECTED`` status are excluded from the query
-  *and* guarded in the Python dispatch loop.
+  (human-only).  The REST API client reads this status but never writes it.
+- **BR-3:** Tickets in ``SKIP_REJECTED`` status are excluded from the REST
+  query *and* guarded again in the Python dispatch loop.
 - **GAP-7 mitigation:** The dev task description instructs the agent to
   transition to ``START_DEVELOPMENT`` as its **very first action**, so a
   restarted process sees the in-progress status (not the scan_for_work status)
@@ -33,7 +34,6 @@ Business Rules Enforced
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import time
@@ -43,12 +43,14 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Set
 from crewai import Task
 
 from src.crew.builder import CrewBuilder
-from src.ticket.models import PRRecord
+from src.ticket.models import PRRecord, TicketRecord
+from src.ticket.rest_client import TicketFetchError
 from src.ticket.workflow import WorkflowConfig, WorkflowOperation
 
 if TYPE_CHECKING:
     from src.agents.registry import AgentRegistry
     from src.config.settings import AppSettings
+    from src.ticket.registry import TrackerRegistry
 
 __all__: List[str] = ["scan_and_dispatch_job"]
 
@@ -66,41 +68,6 @@ _in_progress_tickets: Set[str] = set()
 # ---------------------------------------------------------------------------
 _open_prs: Dict[str, PRRecord] = {}       # ticket_id → PRRecord
 _prs_under_review: Dict[str, str] = {}    # ticket_id → pr_url
-
-
-def _build_scan_task_description(workflow: WorkflowConfig) -> str:
-    """Build the scanner task description with operation-resolved status strings."""
-    scan_status = workflow.status_for(WorkflowOperation.SCAN_FOR_WORK)
-    skip_status = workflow.status_for(WorkflowOperation.SKIP_REJECTED)
-    return (
-        f"Use jira/search_issues with JQL "
-        f"'status = \"{scan_status}\" AND status != \"{skip_status}\"' "
-        f"to find all tickets that are in '{scan_status}' status "
-        f"with no open sub-task dependencies.\n"
-        f"Also use clickup/search_tasks to check for ClickUp tasks with "
-        f"status='{scan_status}' (excluding '{skip_status}') "
-        f"and no unresolved dependencies.\n\n"
-        "Return a JSON array of objects, one per ready ticket, with these fields:\n"
-        '  - "id":     the ticket/task identifier (e.g. "PROJ-42")\n'
-        '  - "source": either "jira" or "clickup"\n'
-        '  - "title":  the ticket title / summary\n'
-        '  - "url":    the ticket URL (if available)\n'
-        '  - "status": the current status string of the ticket\n\n'
-        "If no ready tickets are found, return an empty JSON array: [].\n\n"
-        "IMPORTANT:\n"
-        f"  - Do NOT set any ticket to '{scan_status}' — that status is "
-        "human-only (BR-1). Only humans may set a ticket to that state.\n"
-        f"  - Do NOT process or modify tickets in '{skip_status}' status — "
-        "they are silently skipped (BR-3)."
-    )
-
-
-_SCAN_TASK_EXPECTED_OUTPUT: str = (
-    "A JSON array of ready ticket objects, e.g.: "
-    '[{"id": "PROJ-42", "source": "jira", "title": "Implement login", '
-    '"url": "https://...", "status": "ACCEPTED"}]. '
-    "Return an empty array if no tickets are ready."
-)
 
 
 def _build_dev_task_description(
@@ -260,6 +227,7 @@ def scan_and_dispatch_job(
     settings: "AppSettings",
     executor: ThreadPoolExecutor,
     workflow: Optional[WorkflowConfig] = None,
+    tracker_registry: Optional["TrackerRegistry"] = None,
 ) -> None:
     """APScheduler job: scan for ready tickets and dispatch Dev Agent crews.
 
@@ -267,16 +235,24 @@ def scan_and_dispatch_job(
     :class:`~src.scheduler.runner.SchedulerRunner` and called on the
     configured interval.
 
+    Ticket discovery (Step 1) now calls the ClickUp and JIRA REST APIs
+    **directly** via :class:`~src.ticket.registry.TrackerRegistry`, bypassing
+    the LLM entirely.  This removes one LLM round-trip from every poll cycle.
+
     Args:
-        registry: The shared :class:`~src.agents.registry.AgentRegistry`
-            populated at startup.
-        settings: The application :class:`~src.config.settings.AppSettings`
-            singleton.
-        executor: The bounded :class:`~concurrent.futures.ThreadPoolExecutor`
-            shared across all dev-agent dispatches.
-        workflow: Optional :class:`~src.ticket.workflow.WorkflowConfig`
-            instance.  When ``None``, a permissive fallback is constructed
-            using legacy status strings with a warning.
+        registry:         The shared :class:`~src.agents.registry.AgentRegistry`
+                          populated at startup.
+        settings:         The application :class:`~src.config.settings.AppSettings`
+                          singleton.
+        executor:         The bounded :class:`~concurrent.futures.ThreadPoolExecutor`
+                          shared across all dev-agent dispatches.
+        workflow:         Optional :class:`~src.ticket.workflow.WorkflowConfig`
+                          instance.  When ``None``, a permissive fallback is
+                          constructed using legacy status strings with a warning.
+        tracker_registry: Optional :class:`~src.ticket.registry.TrackerRegistry`
+                          pre-built with REST clients.  When ``None``, a fallback
+                          registry is built on-the-fly from *settings* (useful for
+                          backward-compat and tests that pass settings directly).
     """
     logger.info("scan_and_dispatch_job: scanning for ready tickets …")
 
@@ -300,76 +276,85 @@ def scan_and_dispatch_job(
         )
 
     # ------------------------------------------------------------------
-    # Step 1 — Scanner Crew: find all ready tickets
+    # Step 0b — Resolve TrackerRegistry
     # ------------------------------------------------------------------
-    try:
-        dev_agent = registry["dev_agent"]
-    except KeyError:
-        logger.error(
-            "scan_and_dispatch_job: 'dev_agent' not found in registry — available ids: %s. Skipping run.",
-            registry.agent_ids(),
+    if tracker_registry is None:
+        # Build on-the-fly from settings (fallback path).
+        from src.ticket.registry import TrackerRegistry as _TrackerRegistry
+
+        try:
+            dev_agent = registry["dev_agent"]
+        except KeyError:
+            logger.error(
+                "scan_and_dispatch_job: 'dev_agent' not found in registry — "
+                "available ids: %s. Skipping run.",
+                registry.agent_ids(),
+            )
+            return
+
+        tracker_registry = _TrackerRegistry(
+            workflow=workflow,
+            dev_agent=dev_agent,
+            crew_builder=CrewBuilder,
+            settings=settings,
         )
-        return
-
-    scan_description = _build_scan_task_description(workflow)
-    scan_task = Task(
-        description=scan_description,
-        expected_output=_SCAN_TASK_EXPECTED_OUTPUT,
-        agent=dev_agent,
-    )
-    scanner_crew = CrewBuilder.build(
-        agents=[dev_agent],
-        tasks=[scan_task],
-        process="sequential",
-    )
-
-    try:
-        scan_result = scanner_crew.kickoff()
-    except Exception:  # noqa: BLE001
-        logger.exception("scan_and_dispatch_job: scanner crew raised an exception.")
-        return
+    else:
+        # Verify dev_agent is present (needed for _execute_ticket).
+        try:
+            registry["dev_agent"]
+        except KeyError:
+            logger.error(
+                "scan_and_dispatch_job: 'dev_agent' not found in registry — "
+                "available ids: %s. Skipping run.",
+                registry.agent_ids(),
+            )
+            return
 
     # ------------------------------------------------------------------
-    # Step 2 — Parse scan result
+    # Step 1 — Direct REST API: find all ready tickets across all sources.
+    # No LLM crew is created here — deterministic HTTP calls only.
     # ------------------------------------------------------------------
-    raw_output: str = str(scan_result).strip()
+    all_tickets: List[TicketRecord] = []
+    for source in ("jira", "clickup"):
+        try:
+            tracker = tracker_registry.get(source)
+            fetched = tracker.fetch_tickets_for_operation(WorkflowOperation.SCAN_FOR_WORK)
+            logger.info(
+                "scan_and_dispatch_job: %s returned %d ticket(s).",
+                source,
+                len(fetched),
+            )
+            all_tickets.extend(fetched)
+        except TicketFetchError:
+            logger.exception(
+                "scan_and_dispatch_job: REST fetch failed for source '%s' — skipping.",
+                source,
+            )
+        except ValueError:
+            # REST client not configured for this source (missing env vars).
+            logger.warning(
+                "scan_and_dispatch_job: source '%s' is not configured (missing "
+                "credentials or list ID) — skipping.",
+                source,
+            )
 
-    # The LLM may wrap the JSON in a markdown code block — strip it.
-    if raw_output.startswith("```"):
-        lines = raw_output.splitlines()
-        raw_output = "\n".join(line for line in lines if not line.strip().startswith("```"))
-
-    try:
-        tickets: list[dict] = json.loads(raw_output)
-    except json.JSONDecodeError:
-        logger.warning(
-            "scan_and_dispatch_job: could not parse scanner output as JSON. "
-            "Raw output (first 500 chars): %.500s",
-            raw_output,
-        )
-        return
-
-    if not tickets:
+    if not all_tickets:
         logger.info("scan_and_dispatch_job: no ready tickets found.")
         return
 
-    logger.info("scan_and_dispatch_job: found %d ready ticket(s).", len(tickets))
+    logger.info(
+        "scan_and_dispatch_job: found %d ready ticket(s) across all sources.",
+        len(all_tickets),
+    )
 
     # ------------------------------------------------------------------
-    # Step 3 — Dispatch one Dev Crew per ticket (bounded pool)
+    # Step 2 — Dispatch one Dev Crew per ticket (bounded pool)
     # ------------------------------------------------------------------
-    for ticket in tickets:
-        ticket_id: str = str(ticket.get("id", ""))
-        source: str = str(ticket.get("source", "jira"))
-        title: str = str(ticket.get("title", ticket_id))
-        raw_status: str = str(ticket.get("status", ""))
-
-        if not ticket_id:
-            logger.warning(
-                "scan_and_dispatch_job: ticket entry missing 'id' field — skipped: %s",
-                ticket,
-            )
-            continue
+    for ticket in all_tickets:
+        ticket_id: str = ticket.id
+        source: str = ticket.source
+        title: str = ticket.title
+        raw_status: str = ticket.raw_status
 
         # BR-3 guard: skip REJECTED tickets in the dispatch loop.
         if workflow.matches(WorkflowOperation.SKIP_REJECTED, raw_status):
