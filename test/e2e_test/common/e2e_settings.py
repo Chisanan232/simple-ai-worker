@@ -106,22 +106,54 @@ class E2ESettings(BaseSettings):
     SLACK_TEST_CHANNEL_ID: Optional[str] = None
 
     # ------------------------------------------------------------------
+    # FakeLLM / Testcontainers toggles  (NEW)
+    # ------------------------------------------------------------------
+
+    USE_FAKE_LLM: bool = False
+    """Replace LLMFactory.build() with FakeLLM for the entire test session.
+
+    When ``true``, no real LLM API key is needed.  Tests exercise
+    orchestration / handler logic but do NOT validate LLM reasoning quality.
+
+    Set via ``E2E_USE_FAKE_LLM=true`` in ``test/e2e_test/.env.e2e``.
+    """
+
+    USE_TESTCONTAINERS: bool = False
+    """Automatically start the Docker Compose MCP stack via testcontainers.
+
+    When ``true``, the ``live_mcp_stack`` session fixture spins up
+    ``docker-compose.e2e.yml`` and derives container-mapped port URLs
+    instead of reading ``E2E_MCP_*_URL`` from the env file.
+
+    Set via ``E2E_USE_TESTCONTAINERS=true`` in ``test/e2e_test/.env.e2e``.
+    """
+
+    # ------------------------------------------------------------------
     # Computed helpers — the sole decision points used by conftest.py
     # ------------------------------------------------------------------
 
     @property
     def has_llm_key(self) -> bool:
-        """True if at least one LLM API key is configured."""
-        return bool(self.OPENAI_API_KEY or self.ANTHROPIC_API_KEY)
+        """True if at least one LLM API key is configured, OR fake LLM is enabled.
+
+        The ``skip_without_llm`` marker checks this property, so setting
+        ``USE_FAKE_LLM=true`` prevents tests from being skipped even when
+        no real provider API key is available.
+        """
+        return bool(self.OPENAI_API_KEY or self.ANTHROPIC_API_KEY or self.USE_FAKE_LLM)
 
     @property
     def is_live_mode(self) -> bool:
-        """True when at least one real MCP server URL is configured.
+        """True when real MCP server URLs are configured OR testcontainers mode is on.
 
         Used by the ``mcp_urls`` fixture to switch automatically from
         stub mode (pytest-httpserver) to live mode (Docker Compose).
+
+        - Manual live mode: ``E2E_MCP_*_URL`` values set in ``.env.e2e``.
+        - Testcontainers mode: ``E2E_USE_TESTCONTAINERS=true`` — ports are
+          derived from the running containers, not from ``E2E_MCP_*_URL``.
         """
-        return any([
+        return self.USE_TESTCONTAINERS or any([
             self.MCP_JIRA_URL,
             self.MCP_CLICKUP_URL,
             self.MCP_GITHUB_URL,
