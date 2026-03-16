@@ -1,38 +1,58 @@
 """
 E2E test configuration and shared fixtures — Layer 2.
 
-Architecture (Two-Tier E2E Strategy)
+Architecture (Four-Mode E2E Strategy)
 --------------------------------------
-E2E tests use **real LLM calls** (OpenAI / Anthropic) against either:
+E2E tests can run in four modes controlled by ``test/e2e_test/.env.e2e``:
 
-  Tier 1 — Stub Mode (default):
-    MCPStubServer (pytest-httpserver) — no real services needed.
-    Requires only an LLM API key in ``test/e2e_test/.env.e2e``.
+  Mode 1 — Stub + Fake LLM (fully offline, no credentials needed):
+    E2E_USE_FAKE_LLM=true
+    MCP layer: MCPStubServer (pytest-httpserver)
+    LLM layer: FakeLLM — deterministic, no network calls
 
-  Tier 2 — Live Mode:
-    Real MCP servers started via ``test/e2e_test/docker-compose.e2e.yml``.
-    Requires all credentials in ``test/e2e_test/.env.e2e``.
+  Mode 2 — Stub + Real LLM (default):
+    No extra flags needed; only an LLM API key required.
+    MCP layer: MCPStubServer (pytest-httpserver)
+    LLM layer: real OpenAI / Anthropic call
 
-The ``mcp_urls`` fixture selects the tier automatically based on whether
-``E2E_MCP_*_URL`` values are populated in ``test/e2e_test/.env.e2e``.
+  Mode 3 — Testcontainers + Real LLM (auto-managed Docker Compose):
+    E2E_USE_TESTCONTAINERS=true
+    MCP layer: Docker Compose stack started/stopped by pytest automatically
+    LLM layer: real OpenAI / Anthropic call
+
+  Mode 4 — Manual Live + Real LLM (pre-started Docker Compose):
+    Set E2E_MCP_*_URL values in .env.e2e after starting services manually.
+    MCP layer: pre-started Docker Compose containers
+    LLM layer: real OpenAI / Anthropic call
+
+The ``mcp_urls`` fixture selects the MCP tier automatically.
+The ``_maybe_patch_llm_factory`` autouse fixture handles the LLM tier.
 
 Run commands (uv-managed project)
 -----------------------------------
+  # Mode 1 — fully offline
+  E2E_USE_FAKE_LLM=true uv run pytest -m "e2e" test/e2e_test/
+
+  # Mode 2 — stub + real LLM (default)
   uv run pytest -m "e2e" test/e2e_test/
-  uv run pytest -m "e2e" test/e2e_test/dev/
-  uv run pytest -m "e2e" -k "clickup" test/e2e_test/
-  uv run pytest -m "e2e" -k "jira"    test/e2e_test/
+
+  # Mode 3 — testcontainers (auto Docker Compose)
+  E2E_USE_TESTCONTAINERS=true uv run pytest -m "e2e" test/e2e_test/
+
+  # Mode 4 — manual live
+  uv run pytest -m "e2e" test/e2e_test/  # after docker compose up
 """
 
 from __future__ import annotations
 
 import os
-from typing import Any, Generator
+from typing import Any, Generator, Optional
 
 import pytest
 from pytest_httpserver import HTTPServer
 
 from test.e2e_test.common.e2e_settings import E2ESettings, get_e2e_settings
+from test.e2e_test.common.fake_llm import FakeLLM  # noqa: F401 — re-exported for sub-conftest use
 from test.e2e_test.common.mcp_stub import MCPStubServer, RecordingStub  # noqa: F401
 from src.ticket.workflow import WorkflowConfig
 
@@ -140,17 +160,197 @@ def e2e_workflow_config() -> WorkflowConfig:
 
 
 # ---------------------------------------------------------------------------
-# Function-scoped: two-tier URL selector
+# Session-scoped: testcontainers Docker Compose stack  (Mode 3)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def live_mcp_stack(e2e_settings: E2ESettings) -> Generator[dict[str, str], None, None]:
+    """Start the Docker Compose MCP stack via testcontainers (Mode 3 only).
+
+    Activated when ``E2E_USE_TESTCONTAINERS=true`` is set in
+    ``test/e2e_test/.env.e2e``.  If testcontainers mode is disabled, this
+    fixture yields an empty dict immediately (it is only ever requested by
+    ``mcp_urls`` when the flag is on).
+
+    The fixture:
+    - Uses ``testcontainers.compose.DockerCompose`` to start
+      ``test/e2e_test/docker-compose.e2e.yml``.
+    - Forwards ``test/e2e_test/.env.e2e`` as the env file so that all
+      ``E2E_*`` credentials are available inside the containers.
+    - Blocks until all four healthchecks pass (``wait=True``).
+    - Yields a ``{service: url}`` dict derived from the container-mapped ports.
+    - Stops and removes all containers on session teardown.
+    """
+    if not e2e_settings.USE_TESTCONTAINERS:
+        yield {}
+        return
+
+    try:
+        from testcontainers.compose import DockerCompose
+    except ImportError as exc:
+        pytest.skip(
+            f"testcontainers[compose] is not installed — "
+            f"run `uv add --group dev 'testcontainers[compose]>=4.9.0'` to enable "
+            f"Mode 3.  Original error: {exc}"
+        )
+
+    compose = DockerCompose(
+        context="test/e2e_test",
+        compose_file_name="docker-compose.e2e.yml",
+        env_file="test/e2e_test/.env.e2e",
+        pull=False,
+        wait=True,
+    )
+
+    with compose:
+        def _url(service: str, port: int, path: str = "/mcp") -> str:
+            host = compose.get_service_host(service_name=service, port=port)
+            mapped_port = compose.get_service_port(service_name=service, port=port)
+            return f"http://{host}:{mapped_port}{path}"
+
+        urls = {
+            "jira":    _url("mcp-jira-e2e",    18100),
+            "clickup": _url("mcp-clickup-e2e", 18101),
+            "github":  _url("mcp-github-e2e",  18102),
+            "slack":   _url("mcp-slack-e2e",   18103),
+        }
+        yield urls
+
+
+# ---------------------------------------------------------------------------
+# Session-scoped autouse: FakeLLM injection  (Mode 1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _maybe_patch_llm_factory(
+    e2e_settings: E2ESettings,
+) -> Generator[None, None, None]:
+    """Optionally replace ``LLMFactory.build`` with a ``FakeLLM`` for the session.
+
+    Activated when ``E2E_USE_FAKE_LLM=true`` is set in
+    ``test/e2e_test/.env.e2e``.  No action is taken when the flag is off
+    (the fixture yields immediately).
+
+    Implementation notes
+    --------------------
+    - ``unittest.mock.patch`` (not ``monkeypatch``) is used here because
+      pytest's ``monkeypatch`` fixture is function-scoped and cannot be used
+      inside session-scoped fixtures.
+    - The patch target is ``src.agents.llm_factory.LLMFactory.build`` —
+      exactly where ``AgentFactory`` calls it — so every agent constructed
+      during the session receives a ``FakeLLM`` instance.
+    - The shared ``FakeLLM`` instance is stored on the module so that the
+      ``fake_llm_session`` fixture can expose it for inspection.
+    """
+    if not e2e_settings.USE_FAKE_LLM:
+        yield
+        return
+
+    from unittest.mock import patch
+
+    _shared_fake_llm = FakeLLM()
+
+    # Store on module so fake_llm_session can retrieve it.
+    import test.e2e_test.conftest as _self
+    _self._session_fake_llm = _shared_fake_llm
+
+    with patch(
+        "src.agents.llm_factory.LLMFactory.build",
+        return_value=_shared_fake_llm,
+    ):
+        yield
+
+    # Clean up the module-level reference after session teardown.
+    _self._session_fake_llm = None
+
+
+# Module-level slot for the shared FakeLLM instance (set by _maybe_patch_llm_factory).
+_session_fake_llm: Optional[FakeLLM] = None
+
+
+# ---------------------------------------------------------------------------
+# Session-scoped: shared FakeLLM instance accessor
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def fake_llm_session(e2e_settings: E2ESettings) -> Optional[FakeLLM]:
+    """Return the shared ``FakeLLM`` instance active for this session, or ``None``.
+
+    Use this when tests in the same session need to inspect the global call
+    log (e.g. asserting that ``LLMFactory.build`` was called N times across
+    multiple agents).
+
+    Returns ``None`` when ``E2E_USE_FAKE_LLM=false`` — callers should guard::
+
+        def test_something(fake_llm_session):
+            if fake_llm_session is None:
+                pytest.skip("fake LLM not active")
+    """
+    import test.e2e_test.conftest as _self
+    return _self._session_fake_llm
+
+
+# ---------------------------------------------------------------------------
+# Function-scoped: per-test FakeLLM instance
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
-def mcp_urls(e2e_settings: E2ESettings, httpserver: HTTPServer) -> dict[str, str]:
-    """Return MCP server URLs for stub mode or live mode.
+def fake_llm(e2e_settings: E2ESettings) -> Optional[FakeLLM]:
+    """Return a fresh ``FakeLLM`` instance for this test, or ``None``.
 
-    Stub mode  (is_live_mode=False): all four URLs point at the same httpserver.
-    Live mode  (is_live_mode=True):  URLs from E2E_MCP_*_URL in .env.e2e.
+    Use this fixture when a test needs to register custom keyword→response
+    mappings before constructing an agent.  The fresh instance is independent
+    of the session-level patch — the test is responsible for passing it to
+    the agent builder or using it with ``monkeypatch`` to override the factory.
+
+    Returns ``None`` when ``E2E_USE_FAKE_LLM=false``.
+
+    Example::
+
+        def test_custom_response(fake_llm, monkeypatch):
+            if fake_llm is None:
+                pytest.skip("fake LLM not active")
+            fake_llm.register("search_issues", "No open tickets found.")
+            monkeypatch.setattr(
+                "src.agents.llm_factory.LLMFactory.build", lambda *a, **kw: fake_llm
+            )
+            # ... run agent code ...
+            assert fake_llm.was_called()
     """
+    if not e2e_settings.USE_FAKE_LLM:
+        return None
+    return FakeLLM()
+
+
+# ---------------------------------------------------------------------------
+# Function-scoped: three-mode URL selector
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mcp_urls(
+    e2e_settings: E2ESettings,
+    httpserver: HTTPServer,
+    live_mcp_stack: dict[str, str],
+) -> dict[str, str]:
+    """Return MCP server URLs for the active test mode.
+
+    Mode 3 — Testcontainers (``USE_TESTCONTAINERS=true``):
+        URLs derived from container-mapped ports via ``live_mcp_stack``.
+
+    Mode 4 — Manual live (``E2E_MCP_*_URL`` set in ``.env.e2e``):
+        URLs read directly from ``E2ESettings``.
+
+    Modes 1 & 2 — Stub (default):
+        All four URLs point at the same ``pytest-httpserver`` instance.
+    """
+    if e2e_settings.USE_TESTCONTAINERS:
+        return live_mcp_stack
+
     if e2e_settings.is_live_mode:
         return {
             "jira":    e2e_settings.MCP_JIRA_URL or "",
@@ -158,6 +358,7 @@ def mcp_urls(e2e_settings: E2ESettings, httpserver: HTTPServer) -> dict[str, str
             "github":  e2e_settings.MCP_GITHUB_URL or "",
             "slack":   e2e_settings.MCP_SLACK_URL or "",
         }
+
     stub_url = httpserver.url_for("/mcp")
     return {"jira": stub_url, "clickup": stub_url, "github": stub_url, "slack": stub_url}
 
