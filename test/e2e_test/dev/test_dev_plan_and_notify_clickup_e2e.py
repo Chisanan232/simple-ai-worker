@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -32,12 +32,12 @@ pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 from test.e2e_test.conftest import (
     MCPStubServer,
+    FakeLLM,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
     E2E_WORKFLOW_CONFIG,
 )
-from test.e2e_test.common.e2e_settings import get_e2e_settings
 from src.ticket.models import TicketComment, TicketRecord
 from src.ticket.workflow import WorkflowConfig
 
@@ -95,6 +95,7 @@ class TestDevAgentGeneratesInitialPlan:
     def test_generates_initial_plan_for_open_task(
         self,
         httpserver: HTTPServer,
+        planning_tool_order: None,
     ) -> None:
         """E2E-PN-01 (ClickUp): OPEN task → plan_and_notify_job → plan posted as comment."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -229,6 +230,7 @@ class TestDevAgentBatchPlanning:
     def test_generates_plans_for_multiple_open_tasks(
         self,
         httpserver: HTTPServer,
+        planning_tool_order: None,
     ) -> None:
         """E2E-PN-02 (ClickUp): 3 OPEN tasks → plan_and_notify_job → 3 plan comments."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -392,6 +394,7 @@ class TestDevAgentRevisesPlanOnHumanFeedback:
     def test_revises_plan_on_human_feedback(
         self,
         httpserver: HTTPServer,
+        planning_tool_order: None,
     ) -> None:
         """E2E-PN-04 (ClickUp): IN PLANNING task + human comment → revised plan posted."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -597,6 +600,7 @@ class TestPlanCommentIncludesHumanNotification:
     def test_plan_comment_includes_human_notification(
         self,
         httpserver: HTTPServer,
+        planning_tool_order: None,
     ) -> None:
         """E2E-PN-06 (ClickUp): Plan comment contains human review notification."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -686,6 +690,8 @@ class TestFullPlanningLoop:
     def test_full_planning_loop(
         self,
         httpserver: HTTPServer,
+        planning_tool_order: None,
+        fake_llm_session: Optional[FakeLLM],
     ) -> None:
         """E2E-PN-07 (ClickUp): OPEN → initial plan → IN PLANNING → revision → ACCEPTED → dispatch."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -778,6 +784,10 @@ class TestFullPlanningLoop:
         assert len(in_planning_write_calls) == 0, (
             "BR-10 violated: IN PLANNING written during planning run 1"
         )
+
+        # Reset FakeLLM turn counters so run 2 starts fresh
+        if fake_llm_session is not None:
+            fake_llm_session.reset_turns()
 
         # ── RUN 2: ticket at IN PLANNING with human comment → revision ────
         human_comment = TicketComment(
