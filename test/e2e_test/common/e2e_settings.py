@@ -144,21 +144,21 @@ class E2ESettings(BaseSettings):
 
     @property
     def is_live_mode(self) -> bool:
-        """True when real MCP server URLs are configured OR testcontainers mode is on.
+        """True when testcontainers mode is active (``E2E_USE_TESTCONTAINERS=true``).
 
-        Used by the ``mcp_urls`` fixture to switch automatically from
-        stub mode (pytest-httpserver) to live mode (Docker Compose).
+        ``E2E_USE_TESTCONTAINERS`` is the single source of truth for MCP layer
+        selection:
 
-        - Manual live mode: ``E2E_MCP_*_URL`` values set in ``.env.e2e``.
-        - Testcontainers mode: ``E2E_USE_TESTCONTAINERS=true`` — ports are
-          derived from the running containers, not from ``E2E_MCP_*_URL``.
+        - ``false`` (default) → all tests use ``MCPStubServer``
+          (pytest-httpserver, in-process, no Docker required).
+        - ``true`` → all tests use real Docker Compose containers
+          (auto-managed by the ``live_mcp_stack`` fixture).
+
+        The ``E2E_MCP_*_URL`` fields are container connection credentials
+        forwarded into the Docker Compose stack via the env file — they play
+        no role in deciding stub vs. live mode.
         """
-        return self.USE_TESTCONTAINERS or any([
-            self.MCP_JIRA_URL,
-            self.MCP_CLICKUP_URL,
-            self.MCP_GITHUB_URL,
-            self.MCP_SLACK_URL,
-        ])
+        return self.USE_TESTCONTAINERS
 
     @property
     def llm_key_value(self) -> str | None:
