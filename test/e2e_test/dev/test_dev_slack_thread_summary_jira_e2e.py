@@ -33,6 +33,7 @@ from test.e2e_test.conftest import (
     build_e2e_registry,
     skip_without_llm,
 )
+from test.e2e_test.common.e2e_settings import get_e2e_settings
 
 
 def _run_dev_handler_sync(event: dict, registry: Any) -> None:
@@ -61,6 +62,7 @@ class TestDevReadsThreadAndUpdatesTicket:
     def test_dev_reads_thread_and_updates_ticket(
         self,
         httpserver: HTTPServer,
+        thread_summary_tool_order: None,
     ) -> None:
         """E2E-01 (JIRA): [dev] in thread → LLM reads messages → posts jira/add_comment."""
         stub = MCPStubServer(httpserver)
@@ -108,6 +110,7 @@ class TestDevAsksForTicketWhenNoneFound:
     def test_dev_asks_for_ticket_when_none_found(
         self,
         httpserver: HTTPServer,
+        reply_only_tool_order: None,
     ) -> None:
         """E2E-02 (JIRA): Thread with no ticket ID → LLM asks supervisor, never calls add_comment."""
         stub = MCPStubServer(httpserver)
@@ -148,6 +151,7 @@ class TestSlackPermalinkInComment:
     def test_permalink_in_ticket_comment(
         self,
         httpserver: HTTPServer,
+        permalink_tool_order: None,
     ) -> None:
         """E2E-03 (JIRA): JIRA comment body must contain the Slack thread permalink."""
         stub = MCPStubServer(httpserver)
@@ -250,6 +254,7 @@ class TestJIRAIssueUpdated:
     def test_jira_issue_updated_when_jira_key_found(
         self,
         httpserver: HTTPServer,
+        thread_summary_tool_order: None,
     ) -> None:
         """E2E-06 (JIRA): Thread with JIRA key → add_comment called for the issue."""
         stub = MCPStubServer(httpserver)

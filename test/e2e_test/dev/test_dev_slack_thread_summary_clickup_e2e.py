@@ -59,6 +59,7 @@ class TestDevReadsThreadAndUpdatesTicket:
     def test_dev_reads_thread_and_updates_ticket(
         self,
         httpserver: HTTPServer,
+        thread_summary_tool_order: None,
     ) -> None:
         """E2E-01: [dev] in thread → LLM reads messages → posts clickup/add_comment."""
         stub = MCPStubServer(httpserver)
@@ -84,7 +85,6 @@ class TestDevReadsThreadAndUpdatesTicket:
         url = stub.url
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         _run_dev_handler_sync(
@@ -110,6 +110,7 @@ class TestDevAsksForTicketWhenNoneFound:
     def test_dev_asks_for_ticket_when_none_found(
         self,
         httpserver: HTTPServer,
+        reply_only_tool_order: None,
     ) -> None:
         """E2E-02: Thread with no ticket ID → LLM asks supervisor, never calls add_comment."""
         stub = MCPStubServer(httpserver)
@@ -128,7 +129,6 @@ class TestDevAsksForTicketWhenNoneFound:
         url = stub.url
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         _run_dev_handler_sync(
@@ -155,6 +155,7 @@ class TestSlackPermalinkInComment:
     def test_permalink_in_ticket_comment(
         self,
         httpserver: HTTPServer,
+        permalink_tool_order: None,
     ) -> None:
         """E2E-03: ClickUp comment body must contain the Slack thread permalink."""
         stub = MCPStubServer(httpserver)
@@ -186,7 +187,6 @@ class TestSlackPermalinkInComment:
         url = stub.url
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         _run_dev_handler_sync(
@@ -237,7 +237,6 @@ class TestNoNewTicketCreated:
         url = stub.url
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         _run_dev_handler_sync(
@@ -260,6 +259,7 @@ class TestClickUpTaskUpdated:
     def test_clickup_task_updated_when_clickup_id_found(
         self,
         httpserver: HTTPServer,
+        thread_summary_tool_order: None,
     ) -> None:
         """E2E-06: Thread with ClickUp URL → add_comment called for the task."""
         stub = MCPStubServer(httpserver)
@@ -296,7 +296,6 @@ class TestClickUpTaskUpdated:
         url = stub.url
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         _run_dev_handler_sync(
