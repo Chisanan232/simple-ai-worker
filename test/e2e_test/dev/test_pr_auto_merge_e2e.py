@@ -13,7 +13,6 @@ Verifies:
 
 from __future__ import annotations
 
-import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -21,11 +20,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from pytest_httpserver import HTTPServer
-from werkzeug.wrappers import Request, Response
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 from test.e2e_test.conftest import (
+    MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
@@ -67,12 +66,14 @@ class TestAutoMergeWithApproval:
     def test_auto_merge_with_approval_after_timeout(
         self,
         httpserver: HTTPServer,
+        merge_tool_order: None,
     ) -> None:
         """E2E-11: 1 approval + stale PR → merged → ticket → COMPLETE → Slack notified."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/100"
 
@@ -82,48 +83,31 @@ class TestAutoMergeWithApproval:
         transition_calls: list = []
         complete_write_calls: list = []
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
-            params = body.get("params", body.get("arguments", body))
+        stub.register_tool("get_pull_request", lambda args: {
+            "html_url": pr_url,
+            "merged": False,
+            "is_merged": False,
+            "approval_count": 1,
+        })
+        stub.register_tool("get_pull_request_reviews", lambda args: [
+            {"state": "APPROVED", "user": {"login": "reviewer1"}},
+        ])
 
-            if tool == "get_pull_request":
-                return Response(
-                    json.dumps({
-                        "html_url": pr_url,
-                        "merged": False,
-                        "reviews": [{"state": "APPROVED", "user": {"login": "reviewer1"}}],
-                        "approval_count": 1,
-                        "is_merged": False,
-                    }),
-                    content_type="application/json",
-                )
-            elif tool == "get_pull_request_reviews":
-                return Response(
-                    json.dumps([{"state": "APPROVED"}]),
-                    content_type="application/json",
-                )
-            elif tool == "merge_pull_request":
-                merge_calls.append(body)
-                return Response(
-                    json.dumps({"merged": True, "sha": "abc123"}),
-                    content_type="application/json",
-                )
-            elif tool in ("transition_issue", "update_task"):
-                transition_calls.append(body)
-                status = str(params.get("status", params.get("transition", "")))
-                if "COMPLETE" in status.upper():
-                    complete_write_calls.append(body)
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-            elif tool == "send_message":
-                return Response(json.dumps({"ok": True, "ts": "1.1"}), content_type="application/json")
-            else:
-                return Response(json.dumps({"ok": True}), content_type="application/json")
+        def _merge(args: dict) -> dict:
+            merge_calls.append(args)
+            return {"merged": True, "sha": "abc123"}
 
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("merge_pull_request", _merge)
+
+        def _transition(args: dict) -> dict:
+            transition_calls.append(args)
+            if "COMPLETE" in str(args).upper():
+                complete_write_calls.append(args)
+            return {"ok": True}
+
+        stub.register_tool("transition_issue", _transition)
+        stub.register_tool("update_task", _transition)
+        stub.register_tool("send_message", lambda args: {"ok": True, "ts": "1.1"})
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
@@ -150,12 +134,14 @@ class TestNoMergeWithoutApproval:
     def test_no_merge_without_approval(
         self,
         httpserver: HTTPServer,
+        no_approval_tool_order: None,
     ) -> None:
         """E2E-12: 0 approvals → merge_pull_request never called (BR-2)."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/200"
 
@@ -163,32 +149,16 @@ class TestNoMergeWithoutApproval:
 
         merge_calls: list = []
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
-
-            if tool == "get_pull_request":
-                return Response(
-                    json.dumps({
-                        "html_url": pr_url,
-                        "merged": False,
-                        "approval_count": 0,
-                        "is_merged": False,
-                    }),
-                    content_type="application/json",
-                )
-            elif tool == "get_pull_request_reviews":
-                return Response(json.dumps([]), content_type="application/json")
-            elif tool == "merge_pull_request":
-                merge_calls.append(body)
-                return Response(json.dumps({"merged": True}), content_type="application/json")
-            else:
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("get_pull_request", lambda args: {
+            "html_url": pr_url,
+            "merged": False,
+            "is_merged": False,
+            "approval_count": 0,
+        })
+        stub.register_tool("get_pull_request_reviews", lambda args: [])
+        stub.register_tool("merge_pull_request", lambda args: (
+            merge_calls.append(args) or {"merged": True}
+        ))
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
@@ -218,12 +188,14 @@ class TestNoMergeBeforeTimeout:
     def test_no_merge_before_timeout(
         self,
         httpserver: HTTPServer,
+        pr_timeout_tool_order: None,
     ) -> None:
         """E2E-13: 1 approval but PR only 120s old → no merge yet."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/300"
 
@@ -232,25 +204,17 @@ class TestNoMergeBeforeTimeout:
 
         merge_calls: list = []
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
-
-            if tool == "get_pull_request":
-                return Response(
-                    json.dumps({"merged": False, "approval_count": 1, "is_merged": False}),
-                    content_type="application/json",
-                )
-            elif tool == "merge_pull_request":
-                merge_calls.append(body)
-                return Response(json.dumps({"merged": True}), content_type="application/json")
-            else:
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("get_pull_request", lambda args: {
+            "merged": False,
+            "is_merged": False,
+            "approval_count": 1,
+        })
+        stub.register_tool("get_pull_request_reviews", lambda args: [
+            {"state": "APPROVED"},
+        ])
+        stub.register_tool("merge_pull_request", lambda args: (
+            merge_calls.append(args) or {"merged": True}
+        ))
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
@@ -278,12 +242,14 @@ class TestUserMergedBeforeTimeout:
     def test_user_merged_before_timeout(
         self,
         httpserver: HTTPServer,
+        user_merged_tool_order: None,
     ) -> None:
         """E2E-14: PR already merged by user → ticket → COMPLETE, entry cleared."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/400"
 
@@ -292,30 +258,23 @@ class TestUserMergedBeforeTimeout:
         merge_calls: list = []
         transition_calls: list = []
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
+        # PR is already merged — watcher should detect this and transition ticket.
+        stub.register_tool("get_pull_request", lambda args: {
+            "merged": True,
+            "is_merged": True,
+            "approval_count": 1,
+        })
+        stub.register_tool("merge_pull_request", lambda args: (
+            merge_calls.append(args) or {"merged": True}
+        ))
 
-            if tool == "get_pull_request":
-                return Response(
-                    json.dumps({"merged": True, "is_merged": True, "approval_count": 1}),
-                    content_type="application/json",
-                )
-            elif tool == "merge_pull_request":
-                merge_calls.append(body)
-                return Response(json.dumps({"merged": True}), content_type="application/json")
-            elif tool in ("transition_issue", "update_task"):
-                transition_calls.append(body)
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-            elif tool == "send_message":
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-            else:
-                return Response(json.dumps({"ok": True}), content_type="application/json")
+        def _transition(args: dict) -> dict:
+            transition_calls.append(args)
+            return {"ok": True}
 
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("transition_issue", _transition)
+        stub.register_tool("update_task", _transition)
+        stub.register_tool("send_message", lambda args: {"ok": True})
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
@@ -350,35 +309,32 @@ class TestMergeClearsReviewWatch:
     def test_auto_merge_clears_review_watch(
         self,
         httpserver: HTTPServer,
+        merge_tool_order: None,
     ) -> None:
         """E2E-15: After auto-merge, _prs_under_review entry is removed."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/500"
 
         _pre_populate_pr("PROJ-24", pr_url, age_seconds=310)
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
-
-            if tool == "get_pull_request":
-                return Response(
-                    json.dumps({"merged": False, "is_merged": False, "approval_count": 2}),
-                    content_type="application/json",
-                )
-            elif tool in ("merge_pull_request", "transition_issue", "update_task", "send_message"):
-                return Response(json.dumps({"ok": True, "merged": True}), content_type="application/json")
-            else:
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("get_pull_request", lambda args: {
+            "merged": False,
+            "is_merged": False,
+            "approval_count": 2,
+        })
+        stub.register_tool("get_pull_request_reviews", lambda args: [
+            {"state": "APPROVED"},
+            {"state": "APPROVED"},
+        ])
+        stub.register_tool("merge_pull_request", lambda args: {"merged": True, "sha": "def456"})
+        stub.register_tool("transition_issue", lambda args: {"ok": True})
+        stub.register_tool("update_task", lambda args: {"ok": True})
+        stub.register_tool("send_message", lambda args: {"ok": True})
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
