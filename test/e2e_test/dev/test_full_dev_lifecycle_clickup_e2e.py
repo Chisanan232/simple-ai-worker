@@ -73,6 +73,27 @@ def _run_dev_handler_sync(event: dict, registry: Any) -> None:
         executor.shutdown(wait=False)
 
 
+def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
+    """Stub TrackerRegistry that bypasses the real REST API for scan_and_dispatch_job."""
+    _tickets = list(accepted_tickets or [])
+
+    class _StubTracker:
+        def fetch_tickets_for_operation(self, op: Any) -> list:
+            from src.ticket.workflow import WorkflowOperation
+            if op == WorkflowOperation.SCAN_FOR_WORK:
+                return _tickets
+            return []
+
+        def fetch_ticket_comments(self, ticket_id: str) -> list:
+            return []
+
+    class _StubTrackerRegistry:
+        def get(self, source: str) -> _StubTracker:
+            return _StubTracker()
+
+    return _StubTrackerRegistry()
+
+
 # ===========================================================================
 # E2E-20: Full path S1 → COMPLETE with auto-merge (ClickUp)
 # ===========================================================================
@@ -149,7 +170,6 @@ class TestFullPathS1ToComplete:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -167,11 +187,16 @@ class TestFullPathS1ToComplete:
         # Step 2: Scan → dev (S5–S6)
         executor = ThreadPoolExecutor(max_workers=1)
         try:
+            from src.ticket.models import TicketRecord
             scan_and_dispatch_job(
                 registry=registry,
                 settings=_make_e2e_settings(),
                 executor=executor,
                 workflow=workflow,
+                tracker_registry=_make_stub_tracker_registry(accepted_tickets=[
+                    TicketRecord(id="cu-020", source="clickup", title="OAuth2 login",
+                                 url="https://app.clickup.com/t/cu-020", raw_status="ACCEPTED"),
+                ]),
             )
             executor.shutdown(wait=True)
         finally:
@@ -206,6 +231,7 @@ class TestFullPathUserMergeBeforeTimeout:
     def test_full_path_user_merge_before_timeout(
         self,
         httpserver: HTTPServer,
+        user_merged_tool_order: None,
     ) -> None:
         """E2E-21 (ClickUp): Dev opens PR → user merges before timeout → COMPLETE transition."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -248,17 +274,21 @@ class TestFullPathUserMergeBeforeTimeout:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
+            from src.ticket.models import TicketRecord
             scan_and_dispatch_job(
                 registry=registry,
                 settings=_make_e2e_settings(),
                 executor=executor,
                 workflow=workflow,
+                tracker_registry=_make_stub_tracker_registry(accepted_tickets=[
+                    TicketRecord(id="cu-021", source="clickup", title="Auth feature",
+                                 url="https://app.clickup.com/t/cu-021", raw_status="ACCEPTED"),
+                ]),
             )
             executor.shutdown(wait=True)
         finally:
@@ -343,7 +373,6 @@ class TestFullPathWithReviewCommentFix:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -352,7 +381,6 @@ class TestFullPathWithReviewCommentFix:
             registry=registry,
             settings=settings,
             executor=ThreadPoolExecutor(max_workers=1),
-            workflow=workflow,
         )
 
         # Dev must NOT self-approve (no self-approve rule)
@@ -370,6 +398,7 @@ class TestAskAndWaitWhenNoTicketId:
     def test_ask_and_wait_when_no_ticket_id(
         self,
         httpserver: HTTPServer,
+        reply_only_tool_order: None,
     ) -> None:
         """E2E-23 (ClickUp): No ticket ID in thread → ask, add_comment NOT called."""
         stub = MCPStubServer(httpserver)
@@ -394,7 +423,6 @@ class TestAskAndWaitWhenNoTicketId:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -453,16 +481,20 @@ class TestRejectionHaltsProcessing:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         executor = ThreadPoolExecutor(max_workers=1)
         try:
+            from src.ticket.models import TicketRecord
             scan_and_dispatch_job(
                 registry=registry,
                 settings=_make_e2e_settings(),
                 executor=executor,
                 workflow=workflow,
+                tracker_registry=_make_stub_tracker_registry(accepted_tickets=[
+                    TicketRecord(id="cu-023", source="clickup", title="Cancelled work",
+                                 url="https://app.clickup.com/t/cu-023", raw_status="REJECTED"),
+                ]),
             )
             executor.shutdown(wait=True)
         finally:
@@ -473,5 +505,4 @@ class TestRejectionHaltsProcessing:
         )
         assert "cu-023" not in scan_mod._open_prs
         assert "cu-023" not in scan_mod._prs_under_review
-
 
