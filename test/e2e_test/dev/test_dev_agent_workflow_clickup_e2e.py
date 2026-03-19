@@ -41,6 +41,33 @@ def _make_e2e_settings(timeout: int = 300) -> Any:
     return s
 
 
+def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
+    """Build a stub TrackerRegistry that returns pre-seeded TicketRecords.
+
+    Used to bypass the real REST API calls in ``scan_and_dispatch_job`` when
+    running against the MCP stub server (E2E_USE_TESTCONTAINERS=false).
+    """
+    from src.ticket.models import TicketRecord
+
+    _tickets = list(accepted_tickets or [])
+
+    class _StubTracker:
+        def fetch_tickets_for_operation(self, op: Any) -> list:
+            from src.ticket.workflow import WorkflowOperation
+            if op == WorkflowOperation.SCAN_FOR_WORK:
+                return _tickets
+            return []
+
+        def fetch_ticket_comments(self, ticket_id: str) -> list:
+            return []
+
+    class _StubTrackerRegistry:
+        def get(self, source: str) -> _StubTracker:
+            return _StubTracker()
+
+    return _StubTrackerRegistry()
+
+
 # ===========================================================================
 # E2E-07: Dev picks up ACCEPTED ClickUp task, transitions statuses, opens PR
 # ===========================================================================
@@ -50,10 +77,12 @@ class TestDevPicksUpAcceptedTicket:
     def test_dev_picks_up_accepted_and_opens_pr(
         self,
         httpserver: HTTPServer,
+        dev_workflow_tool_order: None,
     ) -> None:
         """E2E-07 (ClickUp): ACCEPTED task → IN PROGRESS → implementation → PR opened → IN REVIEW."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
+        from src.ticket.models import TicketRecord
 
         stub = MCPStubServer(httpserver)
         url = stub.url
@@ -95,9 +124,14 @@ class TestDevPicksUpAcceptedTicket:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
+
+        # Bypass the real REST API — feed the ACCEPTED ticket directly.
+        tracker_registry = _make_stub_tracker_registry(accepted_tickets=[
+            TicketRecord(id="cu-001", source="clickup", title="Implement login",
+                         url="https://app.clickup.com/t/cu-001", raw_status="ACCEPTED"),
+        ])
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
@@ -106,6 +140,7 @@ class TestDevPicksUpAcceptedTicket:
                 settings=_make_e2e_settings(),
                 executor=executor,
                 workflow=workflow,
+                tracker_registry=tracker_registry,
             )
             executor.shutdown(wait=True)
         finally:
@@ -165,7 +200,6 @@ class TestDevPicksUpAcceptedTicket:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -227,7 +261,6 @@ class TestDevSkipsRejectedTicket:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         executor = ThreadPoolExecutor(max_workers=1)
@@ -283,7 +316,6 @@ class TestInProgressTicketNotPickedUp:
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url,
-            e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
         executor = ThreadPoolExecutor(max_workers=1)
@@ -301,5 +333,4 @@ class TestInProgressTicketNotPickedUp:
         assert len(dispatched_tickets) == 0, (
             "IN PROGRESS ticket must not be picked up (scan only targets ACCEPTED)"
         )
-
 

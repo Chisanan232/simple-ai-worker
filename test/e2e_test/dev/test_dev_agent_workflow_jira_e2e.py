@@ -34,6 +34,7 @@ from test.e2e_test.conftest import (
     skip_without_llm,
     E2E_WORKFLOW_CONFIG,
 )
+from test.e2e_test.common.e2e_settings import get_e2e_settings
 from src.ticket.workflow import WorkflowConfig
 
 
