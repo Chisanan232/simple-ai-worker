@@ -64,11 +64,21 @@ _LLM_KEY_AVAILABLE: bool = _e2e_settings.has_llm_key
 # Skip markers
 # ---------------------------------------------------------------------------
 
+# NOTE: pytest.mark.skipif evaluates its condition expression at the time the
+# decorator is applied (module import).  To make the LLM-key check truly
+# dynamic we use a custom pytest mark backed by the _e2e_require_llm_key
+# autouse fixture below, which re-calls get_e2e_settings().has_llm_key at
+# test execution time.
+#
+# skip_without_llm is kept as a convenience decorator for class-level skips;
+# _e2e_require_llm_key provides the runtime guard for tests that are already
+# collected (e.g. when E2E_USE_FAKE_LLM is set only in .env.e2e, not in the
+# shell environment at collection time).
 skip_without_llm = pytest.mark.skipif(
-    not _LLM_KEY_AVAILABLE,
+    not get_e2e_settings().has_llm_key,
     reason=(
-        "E2E tests require OPENAI_API_KEY or ANTHROPIC_API_KEY "
-        "in test/e2e_test/.env.e2e"
+        "E2E tests require OPENAI_API_KEY, ANTHROPIC_API_KEY, "
+        "or E2E_USE_FAKE_LLM=true in test/e2e_test/.env.e2e"
     ),
 )
 
@@ -103,11 +113,16 @@ E2E_WORKFLOW_CONFIG: dict = {
 
 @pytest.fixture(autouse=True)
 def _e2e_require_llm_key(request: pytest.FixtureRequest) -> None:
-    """Skip any e2e-marked test at runtime if no LLM key was available at startup."""
-    if request.node.get_closest_marker("e2e") and not _LLM_KEY_AVAILABLE:
+    """Skip any e2e-marked test at runtime if no LLM key (or fake LLM) is available.
+
+    Re-evaluates ``has_llm_key`` at fixture execution time so that
+    ``E2E_USE_FAKE_LLM=true`` set via an inline env var or ``.env.e2e`` is
+    respected even when it was not present at module import time.
+    """
+    if request.node.get_closest_marker("e2e") and not get_e2e_settings().has_llm_key:
         pytest.skip(
-            "E2E tests require OPENAI_API_KEY or ANTHROPIC_API_KEY "
-            "in test/e2e_test/.env.e2e"
+            "E2E tests require OPENAI_API_KEY, ANTHROPIC_API_KEY, "
+            "or E2E_USE_FAKE_LLM=true in test/e2e_test/.env.e2e"
         )
 
 
@@ -140,6 +155,28 @@ def e2e_state_reset() -> Generator[None, None, None]:
     _clear()
     yield
     _clear()
+
+
+@pytest.fixture(autouse=True)
+def _fake_llm_reset() -> Generator[None, None, None]:
+    """Reset FakeLLM turn counter and tool order before and after each test.
+
+    This prevents turn-counter state from leaking between tests when the
+    session-scoped FakeLLM is shared.  The ``_tool_order`` is also restored
+    to its pre-test value so tests that configure it (via ``set_tool_order``)
+    do not affect subsequent tests.
+    """
+    import test.e2e_test.conftest as _self
+    llm = _self._session_fake_llm
+    if llm is not None:
+        saved_tool_order = list(llm._tool_order)
+        saved_tool_args_overrides = dict(llm._tool_args_overrides)
+        llm.reset_turns()
+    yield
+    if llm is not None:
+        llm.reset_turns()
+        llm._tool_order = saved_tool_order  # type: ignore[possibly-undefined]
+        llm._tool_args_overrides = saved_tool_args_overrides  # type: ignore[possibly-undefined]
 
 
 # ---------------------------------------------------------------------------
@@ -339,25 +376,15 @@ def mcp_urls(
 ) -> dict[str, str]:
     """Return MCP server URLs for the active test mode.
 
-    Mode 3 — Testcontainers (``USE_TESTCONTAINERS=true``):
-        URLs derived from container-mapped ports via ``live_mcp_stack``.
+    ``E2E_USE_TESTCONTAINERS`` is the sole selector:
 
-    Mode 4 — Manual live (``E2E_MCP_*_URL`` set in ``.env.e2e``):
-        URLs read directly from ``E2ESettings``.
-
-    Modes 1 & 2 — Stub (default):
-        All four URLs point at the same ``pytest-httpserver`` instance.
+    - ``true``  → URLs derived from container-mapped ports via ``live_mcp_stack``.
+    - ``false`` → All four URLs point at the same ``pytest-httpserver`` stub
+                  instance (in-process, no Docker required).
     """
     if e2e_settings.USE_TESTCONTAINERS:
         return live_mcp_stack
 
-    if e2e_settings.is_live_mode:
-        return {
-            "jira":    e2e_settings.MCP_JIRA_URL or "",
-            "clickup": e2e_settings.MCP_CLICKUP_URL or "",
-            "github":  e2e_settings.MCP_GITHUB_URL or "",
-            "slack":   e2e_settings.MCP_SLACK_URL or "",
-        }
 
     stub_url = httpserver.url_for("/mcp")
     return {"jira": stub_url, "clickup": stub_url, "github": stub_url, "slack": stub_url}
@@ -394,22 +421,29 @@ def build_dev_agent_against_stubs(
     clickup_url: str,
     github_url: str,
     slack_url: str,
-    e2e_settings: E2ESettings,
+    e2e_settings: Optional[E2ESettings] = None,
 ) -> Any:
-    """Build a real dev_agent CrewAI Agent pointing at stub or live MCP servers."""
+    """Build a real dev_agent CrewAI Agent pointing at stub or live MCP servers.
+
+    ``e2e_settings`` defaults to the module-level singleton so call sites that
+    omit it (e.g. tests that build agents inline without the fixture) still
+    receive a correctly configured LLM — including ``FakeLLM`` when
+    ``E2E_USE_FAKE_LLM=true``.
+    """
+    settings_obj: E2ESettings = e2e_settings or _e2e_settings
     from src.agents.factory import AgentFactory
     from src.config.agent_config import AgentTeamConfig
     from src.config.settings import AppSettings
 
-    injected = _inject_llm_key(e2e_settings)
+    injected = _inject_llm_key(settings_obj)
     try:
         settings_kwargs: dict = dict(
             MCP_JIRA_URL=jira_url, MCP_CLICKUP_URL=clickup_url,
             MCP_GITHUB_URL=github_url, MCP_SLACK_URL=slack_url,
         )
-        llm_key = e2e_settings.llm_key_value
+        llm_key = settings_obj.llm_key_value
         if llm_key:
-            settings_kwargs[e2e_settings.llm_key_env_var] = llm_key
+            settings_kwargs[settings_obj.llm_key_env_var] = llm_key
 
         settings = AppSettings(**settings_kwargs)
         raw_config = {
@@ -460,8 +494,8 @@ def build_dev_agent_against_stubs(
                     "autonomous, pull-based workflow."
                 ),
                 "llm": {
-                    "provider": e2e_settings.LLM_PROVIDER,
-                    "model": e2e_settings.LLM_MODEL,
+                    "provider": settings_obj.LLM_PROVIDER,
+                    "model": settings_obj.LLM_MODEL,
                 },
                 "mcps": ["jira", "clickup", "github", "slack"],
                 "apps": [], "allow_delegation": False, "verbose": False,
@@ -475,21 +509,22 @@ def build_dev_agent_against_stubs(
         _restore_env(injected)
 
 
-def build_planner_agent_against_stubs(url: str, e2e_settings: E2ESettings) -> Any:
+def build_planner_agent_against_stubs(url: str, e2e_settings: Optional[E2ESettings] = None) -> Any:
     """Build a real planner CrewAI Agent pointing at stub or live MCP servers."""
     from src.agents.factory import AgentFactory
     from src.config.agent_config import AgentTeamConfig
     from src.config.settings import AppSettings
 
-    injected = _inject_llm_key(e2e_settings)
+    settings_obj: E2ESettings = e2e_settings or _e2e_settings
+    injected = _inject_llm_key(settings_obj)
     try:
         settings_kwargs: dict = dict(
             MCP_JIRA_URL=url, MCP_CLICKUP_URL=url,
             MCP_GITHUB_URL=url, MCP_SLACK_URL=url,
         )
-        llm_key = e2e_settings.llm_key_value
+        llm_key = settings_obj.llm_key_value
         if llm_key:
-            settings_kwargs[e2e_settings.llm_key_env_var] = llm_key
+            settings_kwargs[settings_obj.llm_key_env_var] = llm_key
 
         settings = AppSettings(**settings_kwargs)
         raw_config = {
@@ -528,8 +563,8 @@ def build_planner_agent_against_stubs(url: str, e2e_settings: E2ESettings) -> An
                     "in agile software development, market research, and business modelling."
                 ),
                 "llm": {
-                    "provider": e2e_settings.LLM_PROVIDER,
-                    "model": e2e_settings.LLM_MODEL,
+                    "provider": settings_obj.LLM_PROVIDER,
+                    "model": settings_obj.LLM_MODEL,
                 },
                 "mcps": ["jira", "clickup", "slack"],
                 "apps": [], "allow_delegation": False, "verbose": False,
@@ -543,21 +578,22 @@ def build_planner_agent_against_stubs(url: str, e2e_settings: E2ESettings) -> An
         _restore_env(injected)
 
 
-def build_dev_lead_agent_against_stubs(url: str, e2e_settings: E2ESettings) -> Any:
+def build_dev_lead_agent_against_stubs(url: str, e2e_settings: Optional[E2ESettings] = None) -> Any:
     """Build a real dev_lead CrewAI Agent pointing at stub or live MCP servers."""
     from src.agents.factory import AgentFactory
     from src.config.agent_config import AgentTeamConfig
     from src.config.settings import AppSettings
 
-    injected = _inject_llm_key(e2e_settings)
+    settings_obj: E2ESettings = e2e_settings or _e2e_settings
+    injected = _inject_llm_key(settings_obj)
     try:
         settings_kwargs: dict = dict(
             MCP_JIRA_URL=url, MCP_CLICKUP_URL=url,
             MCP_GITHUB_URL=url, MCP_SLACK_URL=url,
         )
-        llm_key = e2e_settings.llm_key_value
+        llm_key = settings_obj.llm_key_value
         if llm_key:
-            settings_kwargs[e2e_settings.llm_key_env_var] = llm_key
+            settings_kwargs[settings_obj.llm_key_env_var] = llm_key
 
         settings = AppSettings(**settings_kwargs)
         raw_config = {
@@ -597,8 +633,8 @@ def build_dev_lead_agent_against_stubs(url: str, e2e_settings: E2ESettings) -> A
                     "in system design, task decomposition, and agile estimation."
                 ),
                 "llm": {
-                    "provider": e2e_settings.LLM_PROVIDER,
-                    "model": e2e_settings.LLM_MODEL,
+                    "provider": settings_obj.LLM_PROVIDER,
+                    "model": settings_obj.LLM_MODEL,
                 },
                 "mcps": ["jira", "clickup", "slack"],
                 "apps": [], "allow_delegation": False, "verbose": False,
