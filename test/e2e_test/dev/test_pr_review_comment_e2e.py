@@ -12,7 +12,6 @@ Verifies:
 
 from __future__ import annotations
 
-import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -20,11 +19,11 @@ from unittest.mock import MagicMock
 
 import pytest
 from pytest_httpserver import HTTPServer
-from werkzeug.wrappers import Request, Response
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 from test.e2e_test.conftest import (
+    MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
@@ -51,56 +50,44 @@ class TestFixesChangesRequested:
     def test_fixes_changes_requested_and_replies(
         self,
         httpserver: HTTPServer,
+        review_reply_tool_order: None,
     ) -> None:
         """E2E-16: CHANGES_REQUESTED + 2 comments → fixes committed, comments replied to."""
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         pr_url = "https://github.com/org/repo/pull/600"
         _populate_under_review("PROJ-30", pr_url)
 
         reply_calls: list = []
         approve_calls: list = []
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
+        stub.register_tool("get_pull_request_reviews", lambda args: [
+            {"state": "CHANGES_REQUESTED", "user": {"login": "reviewer1"}},
+        ])
+        stub.register_tool("get_pull_request_comments", lambda args: [
+            {"id": "c1", "body": "Add error handling", "path": "main.py",
+             "line": 10, "resolved": False},
+            {"id": "c2", "body": "Extract this function", "path": "utils.py",
+             "line": 5, "resolved": False},
+        ])
 
-            if tool == "get_pull_request_reviews":
-                return Response(
-                    json.dumps([{"state": "CHANGES_REQUESTED", "user": {"login": "reviewer1"}}]),
-                    content_type="application/json",
-                )
-            elif tool == "get_pull_request_comments":
-                return Response(
-                    json.dumps([
-                        {"id": "c1", "body": "Add error handling", "path": "main.py", "line": 10,
-                         "resolved": False},
-                        {"id": "c2", "body": "Extract this function", "path": "utils.py", "line": 5,
-                         "resolved": False},
-                    ]),
-                    content_type="application/json",
-                )
-            elif tool == "reply_to_review_comment":
-                reply_calls.append(body)
-                return Response(json.dumps({"ok": True, "id": "r1"}), content_type="application/json")
-            elif tool in ("approve_pull_request", "submit_review"):
-                # Capture self-approval attempts.
-                params = body.get("params", body.get("arguments", body))
-                if "APPROVE" in str(params).upper():
-                    approve_calls.append(body)
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-            elif tool == "create_commit":
-                return Response(json.dumps({"sha": "def456"}), content_type="application/json")
-            elif tool == "push_commits":
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-            else:
-                return Response(json.dumps({"ok": True}), content_type="application/json")
+        def _reply(args: dict) -> dict:
+            reply_calls.append(args)
+            return {"ok": True, "id": "r1"}
 
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("reply_to_review_comment", _reply)
+
+        def _approve(args: dict) -> dict:
+            if "APPROVE" in str(args).upper():
+                approve_calls.append(args)
+            return {"ok": True}
+
+        stub.register_tool("approve_pull_request", _approve)
+        stub.register_tool("submit_review", _approve)
+        stub.register_tool("create_commit", lambda args: {"sha": "def456"})
+        stub.register_tool("push_commits", lambda args: {"ok": True})
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
@@ -141,31 +128,15 @@ class TestNoFixForApprovedPR:
         """E2E-17: APPROVED PR + 0 unresolved comments → no fix crew dispatched."""
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         pr_url = "https://github.com/org/repo/pull/700"
         _populate_under_review("PROJ-31", pr_url)
 
-        fix_crew_calls: list = []
-
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
-
-            if tool == "get_pull_request_reviews":
-                return Response(
-                    json.dumps([{"state": "APPROVED"}]),
-                    content_type="application/json",
-                )
-            elif tool == "get_pull_request_comments":
-                return Response(json.dumps([]), content_type="application/json")
-            elif tool in ("reply_to_review_comment", "create_commit"):
-                fix_crew_calls.append(body)
-            return Response(json.dumps({"ok": True}), content_type="application/json")
-
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("get_pull_request_reviews", lambda args: [
+            {"state": "APPROVED"},
+        ])
+        stub.register_tool("get_pull_request_comments", lambda args: [])
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
@@ -197,30 +168,18 @@ class TestDeduplicationPreventsParallelFix:
         import src.scheduler.jobs.pr_review_comment_handler as handler_mod
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         pr_url = "https://github.com/org/repo/pull/800"
         _populate_under_review("PROJ-32", pr_url)
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
-            if tool == "get_pull_request_reviews":
-                return Response(
-                    json.dumps([{"state": "CHANGES_REQUESTED"}]),
-                    content_type="application/json",
-                )
-            elif tool == "get_pull_request_comments":
-                return Response(
-                    json.dumps([{"id": "c1", "body": "Fix this", "path": "x.py", "line": 1,
-                                 "resolved": False}]),
-                    content_type="application/json",
-                )
-            return Response(json.dumps({"ok": True}), content_type="application/json")
-
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("get_pull_request_reviews", lambda args: [
+            {"state": "CHANGES_REQUESTED"},
+        ])
+        stub.register_tool("get_pull_request_comments", lambda args: [
+            {"id": "c1", "body": "Fix this", "path": "x.py",
+             "line": 1, "resolved": False},
+        ])
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
@@ -266,44 +225,28 @@ class TestAINeverSelfApproves:
         """E2E-19: Full fix cycle — approve_pull_request / APPROVE review NEVER called."""
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        url = httpserver.url_for("/mcp")
+        stub = MCPStubServer(httpserver)
+        url = stub.url
         pr_url = "https://github.com/org/repo/pull/900"
         _populate_under_review("PROJ-33", pr_url)
 
         approve_calls: list = []
 
-        def handler(req: Request) -> Response:
-            try:
-                body = json.loads(req.data.decode())
-            except Exception:
-                body = {}
-            tool = body.get("tool", body.get("name", ""))
-            params = body.get("params", body.get("arguments", body))
+        def _capture_approve(args: dict) -> dict:
+            if "APPROVE" in str(args).upper():
+                approve_calls.append(args)
+            return {"ok": True}
 
-            # Catch any approval-related calls.
-            if "approve" in tool.lower():
-                approve_calls.append({"tool": tool, "params": params})
-            elif tool in ("submit_review", "create_review"):
-                if "APPROVE" in str(params).upper():
-                    approve_calls.append({"tool": tool, "params": params})
-
-            if tool == "get_pull_request_reviews":
-                return Response(
-                    json.dumps([{"state": "CHANGES_REQUESTED"}]),
-                    content_type="application/json",
-                )
-            elif tool == "get_pull_request_comments":
-                return Response(
-                    json.dumps([
-                        {"id": "c1", "body": "Add tests", "path": "test_x.py", "line": 1,
-                         "resolved": False},
-                    ]),
-                    content_type="application/json",
-                )
-            else:
-                return Response(json.dumps({"ok": True}), content_type="application/json")
-
-        httpserver.expect_request("/mcp").respond_with_handler(handler)
+        stub.register_tool("get_pull_request_reviews", lambda args: [
+            {"state": "CHANGES_REQUESTED"},
+        ])
+        stub.register_tool("get_pull_request_comments", lambda args: [
+            {"id": "c1", "body": "Add tests", "path": "test_x.py",
+             "line": 1, "resolved": False},
+        ])
+        stub.register_tool("reply_to_review_comment", lambda args: {"ok": True, "id": "r1"})
+        stub.register_tool("approve_pull_request", _capture_approve)
+        stub.register_tool("submit_review", _capture_approve)
 
         dev_agent = build_dev_agent_against_stubs(
             jira_url=url, slack_url=url, github_url=url, clickup_url=url
