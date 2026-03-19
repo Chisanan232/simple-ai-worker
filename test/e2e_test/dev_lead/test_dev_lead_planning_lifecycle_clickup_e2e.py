@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -26,12 +26,14 @@ pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 from test.e2e_test.conftest import (
     MCPStubServer,
+    FakeLLM,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
     E2E_WORKFLOW_CONFIG,
     build_dev_lead_agent_against_stubs,
 )
+from test.e2e_test.common.e2e_settings import get_e2e_settings
 from src.ticket.models import TicketComment, TicketRecord
 from src.ticket.workflow import WorkflowConfig
 
@@ -94,6 +96,7 @@ class TestDevLeadFeasibilityAssessment:
     def test_e2e_dl_01_asks_clarifying_questions_not_creates_tickets(
         self,
         httpserver: HTTPServer,
+        reply_only_tool_order: None,
     ) -> None:
         """E2E-DL-01 (ClickUp): Ambiguous requirement → Dev Lead asks questions, no task created."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
@@ -161,6 +164,7 @@ class TestDevLeadFetchesExistingTask:
     def test_e2e_dl_02_fetches_task_when_id_present(
         self,
         httpserver: HTTPServer,
+        get_task_tool_order: None,
     ) -> None:
         """E2E-DL-02 (ClickUp): Message contains task ID → Dev Lead calls get_task."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
@@ -222,6 +226,7 @@ class TestDevLeadBreakdown:
     def test_e2e_dl_03_creates_subtasks_with_dependencies(
         self,
         httpserver: HTTPServer,
+        breakdown_tool_order: None,
     ) -> None:
         """E2E-DL-03 (ClickUp): Explicit breakdown instruction → sub-tasks created."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
@@ -310,6 +315,7 @@ class TestDevAgentInitialPlan:
     def test_e2e_dl_04_generates_plan_comment_for_open_task(
         self,
         httpserver: HTTPServer,
+        planning_tool_order: None,
     ) -> None:
         """E2E-DL-04 (ClickUp): OPEN task → plan_and_notify_job → plan posted as comment."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -405,6 +411,7 @@ class TestDevAgentPlanRevision:
     def test_e2e_dl_05_revises_plan_based_on_human_comments(
         self,
         httpserver: HTTPServer,
+        planning_tool_order: None,
     ) -> None:
         """E2E-DL-05 (ClickUp): IN PLANNING task + human comment → revised plan posted."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -508,6 +515,8 @@ class TestFullPlanningLifecycle:
     def test_e2e_dl_06_full_planning_lifecycle(
         self,
         httpserver: HTTPServer,
+        breakdown_tool_order: None,
+        fake_llm_session: "Optional[FakeLLM]",
     ) -> None:
         """E2E-DL-06 (ClickUp): Dev Lead breakdown → Dev Agent initial plan → revision."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
@@ -579,6 +588,12 @@ class TestFullPlanningLifecycle:
             f"Expected Dev Lead to create at least 1 sub-task. Got: {create_task_calls}"
         )
         assert len(accepted_writes) == 0, f"BR-1 violated: {accepted_writes}"
+
+        # Switch FakeLLM to planning_tool_order for Phase 2 (Dev Agent plan_and_notify).
+        # Reset the turn counter so the new conversation starts at turn 0.
+        if fake_llm_session is not None:
+            fake_llm_session.set_tool_order("get_task", "add_comment")
+            fake_llm_session.reset_turns()
 
         # Phase 2: Dev Agent plans the first created sub-task
         new_task_id = create_task_calls[0].get("name", "sub-task-1") if create_task_calls else "cu-new"
