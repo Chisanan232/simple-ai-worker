@@ -47,6 +47,8 @@ services:
       - e2e-network
     environment:
       GITHUB_PERSONAL_ACCESS_TOKEN: ${E2E_MCP_GITHUB_TOKEN}
+      GITHUB_TOOLSETS: "all"
+      GITHUB_DYNAMIC_TOOLSETS: 1
     ports:
       - "18102:18102"
     healthcheck:
@@ -69,6 +71,7 @@ services:
       - e2e-network
     environment:
       SLACK_BOT_TOKEN: ${E2E_MCP_SLACK_TOKEN}
+      MCP_HOST: "0.0.0.0"
       MCP_PORT: "18103"
       MCP_TRANSPORT: "sse"
     ports:
@@ -100,7 +103,7 @@ services:
     ports:
       - "18100:18100"
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:18100/healthz || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:18100/sse', timeout=3)\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -117,17 +120,18 @@ services:
     networks:
       - e2e-network
     environment:
-      CLICKUP_API_TOKEN: ${E2E_MCP_CLICKUP_TOKEN}
-      # Leave unset to use the token's default workspace
-      CLICKUP_TEAM_ID: ${E2E_CLICKUP_TEAM_ID:-}
+      # MCP server configuration
+      API_TOKEN: ${E2E_MCP_CLICKUP_TOKEN}
+      SERVER_HOST: "0.0.0.0"
       SERVER_PORT: "18101"
       MCP_TRANSPORT: "sse"
+#      MCP_TRANSPORT: "http-streaming"
+      # Leave unset to use the token's default workspace
+      CLICKUP_TEAM_ID: ${E2E_CLICKUP_TEAM_ID:-}
     ports:
       - "18101:18101"
     healthcheck:
-      test:
-        - "CMD-SHELL"
-        - "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:18101/health', timeout=3)\" || exit 1"
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.connect(('localhost', 18101)); s.close()\" || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
