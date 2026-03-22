@@ -20,13 +20,23 @@ E2E tests can run in four modes controlled by ``test/e2e_test/.env.e2e``:
     MCP layer: Docker Compose stack started/stopped by pytest automatically
     LLM layer: real OpenAI / Anthropic call
 
+  Mode 3b — Testcontainers + Fake LLM (containers, no LLM cost):
+    E2E_USE_TESTCONTAINERS=true  E2E_USE_FAKE_LLM=true
+    MCP layer: Docker Compose stack started/stopped by pytest automatically
+    LLM layer: FakeLLM — drives real tool calls into the running containers
+
   Mode 4 — Manual Live + Real LLM (pre-started Docker Compose):
     Set E2E_MCP_*_URL values in .env.e2e after starting services manually.
     MCP layer: pre-started Docker Compose containers
     LLM layer: real OpenAI / Anthropic call
 
+The two flags are **orthogonal**:
+  - ``E2E_USE_TESTCONTAINERS`` controls the MCP layer (containers vs stub).
+  - ``E2E_USE_FAKE_LLM``       controls the LLM layer (FakeLLM vs real API).
+
 The ``mcp_urls`` fixture selects the MCP tier automatically.
 The ``_maybe_patch_llm_factory`` autouse fixture handles the LLM tier.
+Both are controlled by flags in `test/e2e_test/.env.e2e`.
 
 Run commands (uv-managed project)
 -----------------------------------
@@ -36,8 +46,11 @@ Run commands (uv-managed project)
   # Mode 2 — stub + real LLM (default)
   uv run pytest -m "e2e" test/e2e_test/
 
-  # Mode 3 — testcontainers (auto Docker Compose)
+  # Mode 3 — testcontainers + real LLM (auto Docker Compose)
   E2E_USE_TESTCONTAINERS=true uv run pytest -m "e2e" test/e2e_test/
+
+  # Mode 3b — testcontainers + FakeLLM (containers, no LLM cost)
+  E2E_USE_TESTCONTAINERS=true E2E_USE_FAKE_LLM=true uv run pytest -m "e2e" test/e2e_test/
 
   # Mode 4 — manual live
   uv run pytest -m "e2e" test/e2e_test/  # after docker compose up
@@ -46,10 +59,17 @@ Run commands (uv-managed project)
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, Generator, Optional
+
+# Absolute path to the project root — used for Docker Compose paths so that
+# testcontainers' subprocess always resolves files correctly, regardless of the
+# working directory from which pytest is invoked.
+_PROJECT_ROOT: Path = Path(__file__).parents[2]
 
 import pytest
 from pytest_httpserver import HTTPServer
+from pydantic import SecretStr
 
 from test.e2e_test.common.e2e_settings import E2ESettings, get_e2e_settings
 from test.e2e_test.common.fake_llm import FakeLLM  # noqa: F401 — re-exported for sub-conftest use
@@ -201,24 +221,37 @@ def e2e_workflow_config() -> WorkflowConfig:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def live_mcp_stack(e2e_settings: E2ESettings) -> Generator[dict[str, str], None, None]:
     """Start the Docker Compose MCP stack via testcontainers (Mode 3 only).
 
     Activated when ``E2E_USE_TESTCONTAINERS=true`` is set in
-    ``test/e2e_test/.env.e2e``.  If testcontainers mode is disabled, this
-    fixture yields an empty dict immediately (it is only ever requested by
-    ``mcp_urls`` when the flag is on).
+    ``test/e2e_test/.env.e2e``.
+
+    ``E2E_USE_FAKE_LLM`` is **orthogonal** to this fixture: it controls the
+    LLM layer only (FakeLLM vs real provider), not the MCP layer.  When both
+    flags are ``true``, real Docker containers are started and the tests run
+    against them with FakeLLM driving the tool-call sequence.  This is the
+    intended way to verify real container connectivity without incurring LLM
+    API costs.
+
+    ``autouse=True`` ensures the Docker Compose stack is started exactly once
+    at session start, without requiring every test to request this fixture.
 
     The fixture:
-    - Uses ``testcontainers.compose.DockerCompose`` to start
-      ``test/e2e_test/docker-compose.e2e.yml``.
-    - Forwards ``test/e2e_test/.env.e2e`` as the env file so that all
-      ``E2E_*`` credentials are available inside the containers.
-    - Blocks until all four healthchecks pass (``wait=True``).
-    - Yields a ``{service: url}`` dict derived from the container-mapped ports.
-    - Stops and removes all containers on session teardown.
+    - Derives the set of services to start from ``e2e_settings.configured_tc_services``
+      (only services whose credentials are present in ``.env.e2e``).  This
+      prevents ``docker compose up --wait`` from failing due to unhealthy
+      containers caused by missing credentials.
+    - Uses ``testcontainers.compose.DockerCompose`` to start only those services.
+    - Blocks until all started healthchecks pass (``wait=True``).
+    - Yields a ``{service_key: url}`` dict derived from the container-mapped ports.
+    - Stops and removes all containers + network on session teardown via a full
+      ``docker compose down --volumes`` (without service filter) so the shared
+      network is also cleaned up.
     """
+    # Only start containers when USE_TESTCONTAINERS=true.  USE_FAKE_LLM is
+    # irrelevant here — it controls the LLM tier, not the MCP tier.
     if not e2e_settings.USE_TESTCONTAINERS:
         yield {}
         return
@@ -232,27 +265,109 @@ def live_mcp_stack(e2e_settings: E2ESettings) -> Generator[dict[str, str], None,
             f"Mode 3.  Original error: {exc}"
         )
 
-    compose = DockerCompose(
-        context="test/e2e_test",
-        compose_file_name="docker-compose.e2e.yml",
+    # Determine which services have credentials configured.  Starting only
+    # those prevents ``docker compose up --wait`` from exiting non-zero when
+    # a service (e.g. mcp-jira-e2e) cannot authenticate due to missing creds.
+    services_to_start = e2e_settings.configured_tc_services
+    if not services_to_start:
+        pytest.skip(
+            "E2E_USE_TESTCONTAINERS=true but no service credentials are configured "
+            "in test/e2e_test/.env.e2e.  Set at least one of: "
+            "E2E_MCP_CLICKUP_TOKEN, E2E_MCP_GITHUB_TOKEN, E2E_MCP_SLACK_TOKEN, "
+            "or (E2E_ATLASSIAN_URL + E2E_ATLASSIAN_EMAIL + E2E_MCP_JIRA_TOKEN)."
+        )
+
+    import warnings
+    warnings.warn(
+        f"[E2E] Testcontainers mode: starting services {services_to_start}",
+        stacklevel=2,
+    )
+
+    # ``context`` is the CWD passed to subprocess for every docker compose
+    # invocation.  ``compose_file_name`` and ``env_file`` are forwarded as
+    # ``-f`` / ``--env-file`` flags and are therefore resolved *relative to
+    # that CWD*.
+    #
+    # Fix: use the absolute project root as context so that all paths are
+    # stable regardless of the directory from which pytest is invoked.
+    compose = DockerCompose(  # type: ignore[possibly-undefined]
+        context=str(_PROJECT_ROOT),
+        compose_file_name="test/e2e_test/docker-compose.e2e.yml",
         env_file="test/e2e_test/.env.e2e",
         pull=False,
         wait=True,
+        services=services_to_start,
     )
 
-    with compose:
-        def _url(service: str, port: int, path: str = "/mcp") -> str:
-            host = compose.get_service_host(service_name=service, port=port)
-            mapped_port = compose.get_service_port(service_name=service, port=port)
-            return f"http://{host}:{mapped_port}{path}"
+    try:
+        compose.start()
+    except Exception as exc:
+        # Attempt a best-effort teardown before propagating the error so that
+        # partially-started containers and networks are not left behind.
+        try:
+            _full_compose_down(_PROJECT_ROOT)
+        except Exception:
+            pass
+        pytest.fail(
+            f"[E2E] docker compose up failed for services {services_to_start}: {exc}\n"
+            "Check that Docker daemon is running and all credentials in "
+            "test/e2e_test/.env.e2e are correct."
+        )
 
-        urls = {
-            "jira":    _url("mcp-jira-e2e",    18100),
-            "clickup": _url("mcp-clickup-e2e", 18101),
-            "github":  _url("mcp-github-e2e",  18102),
-            "slack":   _url("mcp-slack-e2e",   18103),
-        }
+    # Map service name → (logical key used by tests, container port, URL path)
+    # Transport types (used by agent builders and smoke tests):
+    #   GitHub   → Streamable HTTP  → path=/mcp, type=http
+    #   JIRA     → Legacy SSE       → path=/sse, type=sse
+    #   ClickUp  → Legacy SSE       → path=/sse, type=sse
+    #   Slack    → Legacy SSE       → path=/sse, type=sse
+    _SERVICE_MAP = {
+        "mcp-jira-e2e":    ("jira",    18100, "/sse"),
+        "mcp-clickup-e2e": ("clickup", 18101, "/sse/sse"),
+        "mcp-github-e2e":  ("github",  18102, "/mcp"),
+        "mcp-slack-e2e":   ("slack",   18103, "/sse"),
+    }
+
+    urls: dict[str, str] = {}
+    for svc in services_to_start:
+        if svc not in _SERVICE_MAP:
+            continue
+        key, port, path = _SERVICE_MAP[svc]
+        host = compose.get_service_host(service_name=svc, port=port)
+        mapped_port = compose.get_service_port(service_name=svc, port=port)
+        urls[key] = f"http://{host}:{mapped_port}{path}"
+
+    try:
         yield urls
+    finally:
+        # Full ``down --volumes`` (no services filter) removes containers,
+        # volumes *and* the shared network so nothing is left behind.
+        try:
+            _full_compose_down(_PROJECT_ROOT)
+        except Exception as teardown_exc:
+            warnings.warn(
+                f"[E2E] docker compose down failed during teardown: {teardown_exc}",
+                stacklevel=2,
+            )
+
+
+def _full_compose_down(project_root: Path) -> None:
+    """Run ``docker compose down --volumes`` for the E2E stack (no service filter).
+
+    Called by ``live_mcp_stack`` both on normal teardown and on error so that
+    partially-started containers and the shared network are always cleaned up.
+    """
+    import subprocess
+    subprocess.run(
+        [
+            "docker", "compose",
+            "-f", "test/e2e_test/docker-compose.e2e.yml",
+            "--env-file", "test/e2e_test/.env.e2e",
+            "down", "--volumes",
+        ],
+        cwd=str(project_root),
+        capture_output=True,
+        check=False,  # best-effort — don't raise even if already stopped
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -376,18 +491,85 @@ def mcp_urls(
 ) -> dict[str, str]:
     """Return MCP server URLs for the active test mode.
 
-    ``E2E_USE_TESTCONTAINERS`` is the sole selector:
+    Decision logic
+    --------------
+    - ``USE_TESTCONTAINERS=true``       → live container URLs from ``live_mcp_stack``
+                                          (falls back to stub URL for unconfigured services)
+    - ``USE_FAKE_LLM=true`` only        → stub URLs (no containers, FakeLLM drives calls)
+    - neither flag                      → stub URLs (in-process stub)
 
-    - ``true``  → URLs derived from container-mapped ports via ``live_mcp_stack``.
-    - ``false`` → All four URLs point at the same ``pytest-httpserver`` stub
-                  instance (in-process, no Docker required).
+    Note: ``USE_TESTCONTAINERS`` takes priority over ``USE_FAKE_LLM`` for MCP
+    URL selection.  When both are ``true``, real containers are running and
+    FakeLLM is used to drive the tool-call sequence against them — this is a
+    valid and intentional combination for verifying container connectivity
+    without incurring LLM API costs.
     """
-    if e2e_settings.USE_TESTCONTAINERS:
-        return live_mcp_stack
-
-
     stub_url = httpserver.url_for("/mcp")
+
+    if e2e_settings.USE_TESTCONTAINERS:
+        # Real containers are running (started by live_mcp_stack).
+        # For services not configured (absent from live_mcp_stack), fall back
+        # to the stub URL so agents can still be constructed without error.
+        return {
+            "jira":    live_mcp_stack.get("jira",    stub_url),
+            "clickup": live_mcp_stack.get("clickup", stub_url),
+            "github":  live_mcp_stack.get("github",  stub_url),
+            "slack":   live_mcp_stack.get("slack",   stub_url),
+        }
+
+    # Stub mode: FakeLLM-only or no flags set.
     return {"jira": stub_url, "clickup": stub_url, "github": stub_url, "slack": stub_url}
+
+
+# ---------------------------------------------------------------------------
+# Function-scoped: MCPStubServer factory — stub mode only
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mcp_stub(
+    e2e_settings: E2ESettings,
+    httpserver: HTTPServer,
+) -> "MCPStubServer":
+    """Return a ready-to-use ``MCPStubServer`` backed by ``pytest-httpserver``.
+
+    This fixture is the single canonical way for tests to obtain a stub MCP
+    server.  It enforces the mode contract:
+
+    - Stub mode (``USE_TESTCONTAINERS=false``, or ``USE_FAKE_LLM=true``):
+      wraps the in-process ``pytest-httpserver`` instance in an
+      ``MCPStubServer`` and returns it.  The agent connects to ``stub.url``
+      and all tool calls are recorded so that
+      ``stub.was_called("add_comment")`` assertions work.
+
+    - Live mode (``USE_TESTCONTAINERS=true``):
+      skips the test automatically.  In this mode the MCP layer is provided
+      by real Docker containers started by ``live_mcp_stack``; in-process
+      stub recording is not available, so stub-assertion tests cannot run.
+      The dedicated smoke test ``test_live_mcp_smoke.py`` covers live-container
+      connectivity.  ``E2E_USE_FAKE_LLM`` does not change this — when
+      containers are running the stub is always bypassed.
+
+    Migration note
+    --------------
+    Replace ``stub = MCPStubServer(httpserver)`` in test bodies with a
+    ``mcp_stub`` fixture parameter::
+
+        def test_something(self, mcp_stub: MCPStubServer, ...):
+            stub = mcp_stub
+            url  = stub.url
+            ...
+    """
+    # Skip whenever real containers are active — USE_TESTCONTAINERS=true means
+    # the MCP layer is Docker Compose, not the in-process stub, regardless of
+    # whether FakeLLM is also enabled.
+    if e2e_settings.USE_TESTCONTAINERS:
+        pytest.skip(
+            "Stub-assertion tests are skipped in testcontainers mode "
+            "(E2E_USE_TESTCONTAINERS=true).  Real Docker containers are used "
+            "for MCP instead; use test_live_mcp_smoke.py for live connectivity checks."
+        )
+    return MCPStubServer(httpserver)
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +591,45 @@ def _inject_llm_key(settings: E2ESettings) -> dict[str, str]:
 def _restore_env(injected: dict[str, str]) -> None:
     for key in injected:
         os.environ.pop(key, None)
+
+
+def _mcp_credentials_kwargs(settings: E2ESettings) -> dict[str, str]:
+    """Return AppSettings kwargs carrying MCP auth secrets."""
+
+    def _secret_value(secret: Optional[SecretStr]) -> Optional[str]:
+        return secret.get_secret_value() if secret else None
+
+    creds: dict[str, str] = {}
+    for attr in ("MCP_JIRA_TOKEN", "MCP_CLICKUP_TOKEN", "MCP_GITHUB_TOKEN", "MCP_SLACK_TOKEN"):
+        value = _secret_value(getattr(settings, attr, None))
+        if value:
+            creds[attr] = value
+    return creds
+
+
+# ---------------------------------------------------------------------------
+# Transport-type helper
+# ---------------------------------------------------------------------------
+
+
+def _mcp_type_for_url(url: str) -> str:
+    """Return the correct MCP transport type string for *url*.
+
+    Decision logic:
+    - URLs ending in ``/sse`` (or containing ``/sse?``) → ``"sse"``
+      (legacy SSE transport — JIRA, ClickUp, Slack containers).
+    - All other URLs → ``"http"``
+      (Streamable HTTP transport — GitHub container, all stub URLs ending in ``/mcp``).
+
+    This matters because CrewAI / the MCP Python client will use different
+    connection logic depending on ``type``.  Connecting with ``"http"`` to an
+    SSE-only server returns 405 Method Not Allowed; connecting with ``"sse"``
+    to an HTTP server returns a non-event-stream response.
+    """
+    path = url.split("?")[0].rstrip("/")
+    if path.endswith("/sse"):
+        return "sse"
+    return "http"
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +662,7 @@ def build_dev_agent_against_stubs(
             MCP_JIRA_URL=jira_url, MCP_CLICKUP_URL=clickup_url,
             MCP_GITHUB_URL=github_url, MCP_SLACK_URL=slack_url,
         )
+        settings_kwargs.update(_mcp_credentials_kwargs(settings_obj))
         llm_key = settings_obj.llm_key_value
         if llm_key:
             settings_kwargs[settings_obj.llm_key_env_var] = llm_key
@@ -450,7 +672,7 @@ def build_dev_agent_against_stubs(
             "process": "sequential",
             "mcp_servers": {
                 "jira": {
-                    "type": "http", "url": jira_url,
+                    "type": _mcp_type_for_url(jira_url), "url": jira_url,
                     "tool_filter": [
                         "search_issues", "get_issue", "transition_issue",
                         "add_comment", "update_issue",
@@ -458,14 +680,14 @@ def build_dev_agent_against_stubs(
                     "cache_tools_list": False,
                 },
                 "clickup": {
-                    "type": "http", "url": clickup_url,
+                    "type": _mcp_type_for_url(clickup_url), "url": clickup_url,
                     "tool_filter": [
                         "search_tasks", "get_task", "update_task", "add_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "github": {
-                    "type": "http", "url": github_url,
+                    "type": _mcp_type_for_url(github_url), "url": github_url,
                     "tool_filter": [
                         "create_pull_request", "get_pull_request", "merge_pull_request",
                         "get_pull_request_reviews", "get_pull_request_comments",
@@ -474,7 +696,7 @@ def build_dev_agent_against_stubs(
                     "cache_tools_list": False,
                 },
                 "slack": {
-                    "type": "http", "url": slack_url,
+                    "type": _mcp_type_for_url(slack_url), "url": slack_url,
                     "tool_filter": [
                         "send_message", "reply_to_thread", "get_messages",
                         "get_thread_permalink",
@@ -522,6 +744,8 @@ def build_planner_agent_against_stubs(url: str, e2e_settings: Optional[E2ESettin
             MCP_JIRA_URL=url, MCP_CLICKUP_URL=url,
             MCP_GITHUB_URL=url, MCP_SLACK_URL=url,
         )
+        settings_kwargs.update(_mcp_credentials_kwargs(settings_obj))
+        settings_kwargs.update(_mcp_credentials_kwargs(settings_obj))
         llm_key = settings_obj.llm_key_value
         if llm_key:
             settings_kwargs[settings_obj.llm_key_env_var] = llm_key
@@ -531,7 +755,7 @@ def build_planner_agent_against_stubs(url: str, e2e_settings: Optional[E2ESettin
             "process": "sequential",
             "mcp_servers": {
                 "jira": {
-                    "type": "http", "url": url,
+                    "type": _mcp_type_for_url(url), "url": url,
                     "tool_filter": [
                         "create_issue", "search_issues", "update_issue",
                         "transition_issue", "add_comment",
@@ -539,14 +763,14 @@ def build_planner_agent_against_stubs(url: str, e2e_settings: Optional[E2ESettin
                     "cache_tools_list": False,
                 },
                 "clickup": {
-                    "type": "http", "url": url,
+                    "type": _mcp_type_for_url(url), "url": url,
                     "tool_filter": [
                         "create_task", "search_tasks", "update_task", "add_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "slack": {
-                    "type": "http", "url": url,
+                    "type": _mcp_type_for_url(url), "url": url,
                     "tool_filter": ["send_message", "reply_to_thread", "get_messages"],
                     "cache_tools_list": False,
                 },
@@ -600,7 +824,7 @@ def build_dev_lead_agent_against_stubs(url: str, e2e_settings: Optional[E2ESetti
             "process": "sequential",
             "mcp_servers": {
                 "jira": {
-                    "type": "http", "url": url,
+                    "type": _mcp_type_for_url(url), "url": url,
                     "tool_filter": [
                         "get_issue", "search_issues", "create_issue",
                         "update_issue", "link_issues", "transition_issue", "add_comment",
@@ -608,7 +832,7 @@ def build_dev_lead_agent_against_stubs(url: str, e2e_settings: Optional[E2ESetti
                     "cache_tools_list": False,
                 },
                 "clickup": {
-                    "type": "http", "url": url,
+                    "type": _mcp_type_for_url(url), "url": url,
                     "tool_filter": [
                         "get_task", "search_tasks", "create_task",
                         "update_task", "add_comment",
@@ -616,7 +840,7 @@ def build_dev_lead_agent_against_stubs(url: str, e2e_settings: Optional[E2ESetti
                     "cache_tools_list": False,
                 },
                 "slack": {
-                    "type": "http", "url": url,
+                    "type": _mcp_type_for_url(url), "url": url,
                     "tool_filter": ["send_message", "reply_to_thread", "get_messages"],
                     "cache_tools_list": False,
                 },
