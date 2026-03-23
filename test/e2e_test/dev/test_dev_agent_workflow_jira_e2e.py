@@ -164,8 +164,8 @@ class TestDevPicksUpAcceptedTicket:
             assert len(pr_calls) > 0, "Expected LLM to call github/create_pull_request"
 
         # Live mode and stub mode: Check that PR was registered in watcher
-        # In testcontainers mode with FakeLLM, this may not happen, so we make it conditional
-        if not e2e_settings.USE_TESTCONTAINERS or not e2e_settings.USE_FAKE_LLM:
+        # Only check this with real LLM, as FakeLLM may not create PRs
+        if not e2e_settings.USE_FAKE_LLM:
             assert len(scan_mod._open_prs) > 0 or len(scan_mod._prs_under_review) > 0
 
     def test_dev_never_writes_accepted(
