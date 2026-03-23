@@ -20,10 +20,6 @@ import pytest
 pytestmark = [
     pytest.mark.e2e,
     pytest.mark.slow,
-    pytest.mark.skip(reason=(
-        "JIRA tooling not yet configured — "
-        "will be enabled in a future iteration"
-    )),
 ]
 
 from test.e2e_test.conftest import (
