@@ -18,7 +18,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -49,13 +48,13 @@ def _populate_under_review(ticket_id: str, pr_url: str) -> None:
 class TestFixesChangesRequested:
     def test_fixes_changes_requested_and_replies(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         review_reply_tool_order: None,
     ) -> None:
         """E2E-16: CHANGES_REQUESTED + 2 comments → fixes committed, comments replied to."""
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/600"
         _populate_under_review("PROJ-30", pr_url)
@@ -123,12 +122,12 @@ class TestFixesChangesRequested:
 class TestNoFixForApprovedPR:
     def test_no_fix_for_approved_pr(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-17: APPROVED PR + 0 unresolved comments → no fix crew dispatched."""
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/700"
         _populate_under_review("PROJ-31", pr_url)
@@ -162,13 +161,13 @@ class TestNoFixForApprovedPR:
 class TestDeduplicationPreventsParallelFix:
     def test_deduplication_prevents_parallel_fix(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-18: Two rapid triggers for same ticket → fix dispatched at most once."""
         import src.scheduler.jobs.pr_review_comment_handler as handler_mod
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/800"
         _populate_under_review("PROJ-32", pr_url)
@@ -220,12 +219,12 @@ class TestDeduplicationPreventsParallelFix:
 class TestAINeverSelfApproves:
     def test_ai_never_self_approves(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-19: Full fix cycle — approve_pull_request / APPROVE review NEVER called."""
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/900"
         _populate_under_review("PROJ-33", pr_url)

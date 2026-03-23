@@ -26,7 +26,6 @@ from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -94,14 +93,14 @@ def _make_stub_tracker_registry(
 class TestDevAgentGeneratesInitialPlan:
     def test_generates_initial_plan_for_open_task(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-01 (ClickUp): OPEN task → plan_and_notify_job → plan posted as comment."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -229,14 +228,14 @@ class TestDevAgentGeneratesInitialPlan:
 class TestDevAgentBatchPlanning:
     def test_generates_plans_for_multiple_open_tasks(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-02 (ClickUp): 3 OPEN tasks → plan_and_notify_job → 3 plan comments."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -285,7 +284,14 @@ class TestDevAgentBatchPlanning:
         pn_mod._in_planning_tickets.clear()
         pn_mod._plan_comment_watermarks.clear()
 
-        executor = ThreadPoolExecutor(max_workers=3)
+        # max_workers=1 runs the 3 planning crews sequentially.
+        # Using max_workers=3 (concurrent) caused an intermittent race: concurrent
+        # CrewAI crews share the same anyio event loop machinery, and the async
+        # HTTP-client teardown of one crew interfered with another, causing
+        # crew.kickoff() to raise RuntimeError("cancel scope in different task").
+        # Sequential execution eliminates the race while still validating that
+        # all 3 tickets receive a plan comment.
+        executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
@@ -319,13 +325,13 @@ class TestDevAgentBatchPlanning:
 class TestDispatchGuardPreventsDoublePlanning:
     def test_dispatch_guard_prevents_double_planning(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-PN-03 (ClickUp): _in_planning_tickets pre-seeded → ticket NOT re-planned."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -393,14 +399,14 @@ class TestDispatchGuardPreventsDoublePlanning:
 class TestDevAgentRevisesPlanOnHumanFeedback:
     def test_revises_plan_on_human_feedback(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-04 (ClickUp): IN PLANNING task + human comment → revised plan posted."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -518,13 +524,13 @@ class TestDevAgentRevisesPlanOnHumanFeedback:
 class TestNoRevisionWhenNoNewComments:
     def test_no_revision_when_no_new_comments(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-PN-05 (ClickUp): Watermark newer than comment → no revision dispatched."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -599,14 +605,14 @@ class TestNoRevisionWhenNoNewComments:
 class TestPlanCommentIncludesHumanNotification:
     def test_plan_comment_includes_human_notification(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-06 (ClickUp): Plan comment contains human review notification."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -689,7 +695,7 @@ class TestPlanCommentIncludesHumanNotification:
 class TestFullPlanningLoop:
     def test_full_planning_loop(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
         fake_llm_session: Optional[FakeLLM],
     ) -> None:
@@ -697,7 +703,7 @@ class TestFullPlanningLoop:
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls_run1: list = []

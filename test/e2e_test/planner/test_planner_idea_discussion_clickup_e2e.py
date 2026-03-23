@@ -19,7 +19,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -62,11 +61,11 @@ def _run_planner(message: str, thread_ts: str, stub: MCPStubServer, registry: An
 class TestPlannerSurveysNewIdea:
     def test_e2e_pi_01_responds_without_creating_tickets(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         reply_to_thread_tool_order: None,
     ) -> None:
         """E2E-PI-01 (ClickUp): Ambiguous idea → Planner responds, no task created."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_task_calls: list = []
@@ -121,11 +120,11 @@ class TestPlannerSurveysNewIdea:
 class TestPlannerPostsSurveyPlan:
     def test_e2e_pi_02_survey_plan_posted_with_key_dimensions(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         reply_to_thread_tool_order: None,
     ) -> None:
         """E2E-PI-02 (ClickUp): After exchanges, Planner posts survey plan covering key dimensions."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         reply_bodies: list = []
@@ -209,11 +208,11 @@ class TestPlannerPostsSurveyPlan:
 class TestPlannerRejectsIdea:
     def test_e2e_pi_03_rejected_task_created_no_dev_lead(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         create_task_only_tool_order: None,
     ) -> None:
         """E2E-PI-03 (ClickUp): Human rejects idea → REJECTED task + no Dev Lead mention."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_task_calls: list = []
@@ -296,11 +295,11 @@ class TestPlannerRejectsIdea:
 class TestPlannerAcceptsIdea:
     def test_e2e_pi_04_open_task_and_dev_lead_handoff(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         create_task_and_notify_tool_order: None,
     ) -> None:
         """E2E-PI-04 (ClickUp): Human accepts idea → OPEN task + Dev Lead mentioned."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_task_calls: list = []
@@ -391,11 +390,11 @@ class TestPlannerAcceptsIdea:
 class TestFullPlannerDevLeadLifecycle:
     def test_e2e_pi_05_full_idea_lifecycle_planner_to_dev_lead(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         create_task_and_notify_tool_order: None,
     ) -> None:
         """E2E-PI-05 (ClickUp): survey → accept → OPEN task → [dev lead] hand-off."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_task_calls: list = []

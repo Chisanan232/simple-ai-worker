@@ -17,7 +17,8 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
+
+from test.e2e_test.common.e2e_settings import get_e2e_settings
 
 pytestmark = [
     pytest.mark.e2e,
@@ -97,12 +98,12 @@ def _make_stub_tracker_registry(
 class TestDevLeadFeasibilityAssessment:
     def test_e2e_dl_01_asks_clarifying_questions_not_creates_tickets(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-DL-01 (JIRA): Ambiguous requirement → Dev Lead asks questions, no issue created."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_issue_calls: list = []
@@ -156,12 +157,12 @@ class TestDevLeadFeasibilityAssessment:
 class TestDevLeadFetchesExistingStory:
     def test_e2e_dl_02_fetches_story_ticket_when_id_present(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-DL-02 (JIRA): Message contains PROJ-50 → Dev Lead calls get_issue."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         get_issue_calls: list = []
@@ -214,12 +215,12 @@ class TestDevLeadFetchesExistingStory:
 class TestDevLeadBreakdown:
     def test_e2e_dl_03_creates_subtasks_with_dependency_links(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-DL-03 (JIRA): Explicit breakdown → sub-tasks created + parent notified."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_issue_calls: list = []
@@ -298,13 +299,13 @@ class TestDevLeadBreakdown:
 class TestDevAgentInitialPlan:
     def test_e2e_dl_04_generates_plan_comment_for_open_issue(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-DL-04 (JIRA): OPEN issue → plan_and_notify_job → plan posted as comment."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -385,13 +386,13 @@ class TestDevAgentInitialPlan:
 class TestDevAgentPlanRevision:
     def test_e2e_dl_05_revises_plan_based_on_human_comments(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-DL-05 (JIRA): IN PLANNING issue + human comment → revised plan posted."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -481,7 +482,7 @@ class TestDevAgentPlanRevision:
 class TestFullPlanningLifecycle:
     def test_e2e_dl_06_full_planning_lifecycle(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-DL-06 (JIRA): Dev Lead breakdown → Dev Agent plan → no BR violations."""
         # This test is skipped at module level via pytestmark.

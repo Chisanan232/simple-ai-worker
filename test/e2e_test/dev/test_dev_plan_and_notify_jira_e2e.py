@@ -17,7 +17,6 @@ from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [
     pytest.mark.e2e,
@@ -91,14 +90,14 @@ def _make_stub_tracker_registry(
 class TestDevAgentGeneratesInitialPlan:
     def test_generates_initial_plan_for_open_issue(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-01 (JIRA): OPEN issue → plan_and_notify_job → plan posted as comment."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -198,14 +197,14 @@ class TestDevAgentGeneratesInitialPlan:
 class TestDevAgentBatchPlanning:
     def test_generates_plans_for_multiple_open_issues(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-02 (JIRA): 3 OPEN issues → plan_and_notify_job → 3 plan comments."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -285,13 +284,13 @@ class TestDevAgentBatchPlanning:
 class TestDispatchGuardPreventsDoublePlanning:
     def test_dispatch_guard_prevents_double_planning(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-PN-03 (JIRA): _in_planning_tickets pre-seeded → issue NOT re-planned."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -359,14 +358,14 @@ class TestDispatchGuardPreventsDoublePlanning:
 class TestDevAgentRevisesPlanOnHumanFeedback:
     def test_revises_plan_on_human_feedback(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-04 (JIRA): IN PLANNING issue + human comment → revised plan posted."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -461,13 +460,13 @@ class TestDevAgentRevisesPlanOnHumanFeedback:
 class TestNoRevisionWhenNoNewComments:
     def test_no_revision_when_no_new_comments(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-PN-05 (JIRA): Watermark newer than comment → no revision dispatched."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -541,14 +540,14 @@ class TestNoRevisionWhenNoNewComments:
 class TestPlanCommentIncludesHumanNotification:
     def test_plan_comment_includes_human_notification(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-PN-06 (JIRA): Plan comment contains human review notification."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -628,7 +627,7 @@ class TestPlanCommentIncludesHumanNotification:
 class TestFullPlanningLoop:
     def test_full_planning_loop(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
         fake_llm_session: Optional[FakeLLM],
     ) -> None:
@@ -636,7 +635,7 @@ class TestFullPlanningLoop:
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls_run1: list = []

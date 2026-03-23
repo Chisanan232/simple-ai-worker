@@ -19,7 +19,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -65,14 +64,14 @@ def _pre_populate_pr(
 class TestAutoMergeWithApproval:
     def test_auto_merge_with_approval_after_timeout(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         merge_tool_order: None,
     ) -> None:
         """E2E-11: 1 approval + stale PR → merged → ticket → COMPLETE → Slack notified."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/100"
@@ -133,14 +132,14 @@ class TestAutoMergeWithApproval:
 class TestNoMergeWithoutApproval:
     def test_no_merge_without_approval(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         no_approval_tool_order: None,
     ) -> None:
         """E2E-12: 0 approvals → merge_pull_request never called (BR-2)."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/200"
@@ -187,14 +186,14 @@ class TestNoMergeWithoutApproval:
 class TestNoMergeBeforeTimeout:
     def test_no_merge_before_timeout(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         pr_timeout_tool_order: None,
     ) -> None:
         """E2E-13: 1 approval but PR only 120s old → no merge yet."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/300"
@@ -241,14 +240,14 @@ class TestNoMergeBeforeTimeout:
 class TestUserMergedBeforeTimeout:
     def test_user_merged_before_timeout(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         user_merged_tool_order: None,
     ) -> None:
         """E2E-14: PR already merged by user → ticket → COMPLETE, entry cleared."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/400"
@@ -308,14 +307,14 @@ class TestUserMergedBeforeTimeout:
 class TestMergeClearsReviewWatch:
     def test_auto_merge_clears_review_watch(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         merge_tool_order: None,
     ) -> None:
         """E2E-15: After auto-merge, _prs_under_review entry is removed."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/500"

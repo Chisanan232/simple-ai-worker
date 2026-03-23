@@ -16,7 +16,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [
     pytest.mark.e2e,
@@ -54,13 +53,13 @@ def _make_e2e_settings(timeout: int = 300) -> Any:
 class TestDevPicksUpAcceptedTicket:
     def test_dev_picks_up_accepted_and_opens_pr(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-07 (JIRA): ACCEPTED issue → IN PROGRESS → PR opened → IN REVIEW."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -122,12 +121,12 @@ class TestDevPicksUpAcceptedTicket:
 
     def test_dev_never_writes_accepted(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-09 (JIRA): The agent must NEVER write ACCEPTED to any ticket (BR-1)."""
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -188,12 +187,12 @@ class TestDevPicksUpAcceptedTicket:
 class TestDevSkipsRejectedTicket:
     def test_dev_skips_rejected_ticket(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-08 (JIRA): REJECTED issue in scan results → not dispatched."""
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -242,12 +241,12 @@ class TestDevSkipsRejectedTicket:
 class TestInProgressTicketNotPickedUp:
     def test_dev_handles_in_progress_on_restart(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-10 (JIRA): IN PROGRESS issue not returned in scan (scan filters by ACCEPTED only)."""
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 

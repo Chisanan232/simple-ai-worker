@@ -20,7 +20,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -58,11 +57,11 @@ def _run_dev_handler_sync(event: dict, registry: Any) -> None:
 class TestDevReadsThreadAndUpdatesTicket:
     def test_dev_reads_thread_and_updates_ticket(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         thread_summary_tool_order: None,
     ) -> None:
         """E2E-01: [dev] in thread → LLM reads messages → posts clickup/add_comment."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         stub.register_tool("get_messages", lambda args: {
             "ok": True,
             "messages": [
@@ -109,11 +108,11 @@ class TestDevReadsThreadAndUpdatesTicket:
 class TestDevAsksForTicketWhenNoneFound:
     def test_dev_asks_for_ticket_when_none_found(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         reply_only_tool_order: None,
     ) -> None:
         """E2E-02: Thread with no ticket ID → LLM asks supervisor, never calls add_comment."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         stub.register_tool("get_messages", lambda args: {
             "ok": True,
             "messages": [
@@ -154,11 +153,11 @@ class TestDevAsksForTicketWhenNoneFound:
 class TestSlackPermalinkInComment:
     def test_permalink_in_ticket_comment(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         permalink_tool_order: None,
     ) -> None:
         """E2E-03: ClickUp comment body must contain the Slack thread permalink."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         channel_id = "C123"
         expected_permalink = f"https://slack.com/archives/{channel_id}/p111222"
         comment_bodies: list[str] = []
@@ -210,10 +209,10 @@ class TestSlackPermalinkInComment:
 class TestNoNewTicketCreated:
     def test_no_new_ticket_created(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-05: LLM must never call create_task or create_issue."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         create_calls: list = []
 
         def _create(args: dict) -> dict:
@@ -258,11 +257,11 @@ class TestNoNewTicketCreated:
 class TestClickUpTaskUpdated:
     def test_clickup_task_updated_when_clickup_id_found(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         thread_summary_tool_order: None,
     ) -> None:
         """E2E-06: Thread with ClickUp URL → add_comment called for the task."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         add_comment_calls: list = []
 
         def _add_comment(args: dict) -> dict:

@@ -20,7 +20,6 @@ from typing import Any, Optional
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -95,13 +94,13 @@ def _make_stub_tracker_registry(
 class TestDevLeadFeasibilityAssessment:
     def test_e2e_dl_01_asks_clarifying_questions_not_creates_tickets(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         reply_only_tool_order: None,
     ) -> None:
         """E2E-DL-01 (ClickUp): Ambiguous requirement → Dev Lead asks questions, no task created."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_task_calls: list = []
@@ -163,13 +162,13 @@ class TestDevLeadFeasibilityAssessment:
 class TestDevLeadFetchesExistingTask:
     def test_e2e_dl_02_fetches_task_when_id_present(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         get_task_tool_order: None,
     ) -> None:
         """E2E-DL-02 (ClickUp): Message contains task ID → Dev Lead calls get_task."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         get_task_calls: list = []
@@ -225,13 +224,13 @@ class TestDevLeadFetchesExistingTask:
 class TestDevLeadBreakdown:
     def test_e2e_dl_03_creates_subtasks_with_dependencies(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         breakdown_tool_order: None,
     ) -> None:
         """E2E-DL-03 (ClickUp): Explicit breakdown instruction → sub-tasks created."""
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_task_calls: list = []
@@ -314,14 +313,14 @@ class TestDevLeadBreakdown:
 class TestDevAgentInitialPlan:
     def test_e2e_dl_04_generates_plan_comment_for_open_task(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-DL-04 (ClickUp): OPEN task → plan_and_notify_job → plan posted as comment."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -410,14 +409,14 @@ class TestDevAgentInitialPlan:
 class TestDevAgentPlanRevision:
     def test_e2e_dl_05_revises_plan_based_on_human_comments(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         planning_tool_order: None,
     ) -> None:
         """E2E-DL-05 (ClickUp): IN PLANNING task + human comment → revised plan posted."""
         import src.scheduler.jobs.plan_and_notify as pn_mod
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -514,7 +513,7 @@ class TestDevAgentPlanRevision:
 class TestFullPlanningLifecycle:
     def test_e2e_dl_06_full_planning_lifecycle(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         breakdown_tool_order: None,
         fake_llm_session: "Optional[FakeLLM]",
     ) -> None:
@@ -523,7 +522,7 @@ class TestFullPlanningLifecycle:
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         create_task_calls: list = []

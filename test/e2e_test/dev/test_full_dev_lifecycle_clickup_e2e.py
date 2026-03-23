@@ -24,7 +24,6 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from pytest_httpserver import HTTPServer
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
@@ -102,14 +101,14 @@ def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
 class TestFullPathS1ToComplete:
     def test_full_path_s1_to_complete_auto_merge(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-20 (ClickUp): Thread summary → ACCEPTED → dev → PR → approve → auto-merge → COMPLETE."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -230,7 +229,7 @@ class TestFullPathS1ToComplete:
 class TestFullPathUserMergeBeforeTimeout:
     def test_full_path_user_merge_before_timeout(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         user_merged_tool_order: None,
     ) -> None:
         """E2E-21 (ClickUp): Dev opens PR → user merges before timeout → COMPLETE transition."""
@@ -238,7 +237,7 @@ class TestFullPathUserMergeBeforeTimeout:
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -324,13 +323,13 @@ class TestFullPathUserMergeBeforeTimeout:
 class TestFullPathWithReviewCommentFix:
     def test_full_path_with_review_comment_fix_cycle(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-22 (ClickUp): Dev opens PR → reviewer requests changes → fix → re-review → merge."""
         from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -397,11 +396,11 @@ class TestFullPathWithReviewCommentFix:
 class TestAskAndWaitWhenNoTicketId:
     def test_ask_and_wait_when_no_ticket_id(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
         reply_only_tool_order: None,
     ) -> None:
         """E2E-23 (ClickUp): No ticket ID in thread → ask, add_comment NOT called."""
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
 
         add_comment_calls: list = []
@@ -453,13 +452,13 @@ class TestAskAndWaitWhenNoTicketId:
 class TestRejectionHaltsProcessing:
     def test_rejection_halts_all_processing(
         self,
-        httpserver: HTTPServer,
+        mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-24 (ClickUp): REJECTED ticket → no dispatch, no PR, not in watcher dicts."""
         import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
-        stub = MCPStubServer(httpserver)
+        stub = mcp_stub
         url = stub.url
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
