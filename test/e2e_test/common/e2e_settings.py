@@ -144,21 +144,47 @@ class E2ESettings(BaseSettings):
 
     @property
     def is_live_mode(self) -> bool:
-        """True when testcontainers mode is active (``E2E_USE_TESTCONTAINERS=true``).
+        """True when testcontainers mode is active (``USE_TESTCONTAINERS=true``).
 
-        ``E2E_USE_TESTCONTAINERS`` is the single source of truth for MCP layer
-        selection:
+        ``USE_FAKE_LLM`` is **orthogonal** — it controls the LLM tier only.
+        When both flags are ``true``, real Docker containers ARE running and
+        FakeLLM is used to drive tool calls against them.
 
-        - ``false`` (default) → all tests use ``MCPStubServer``
-          (pytest-httpserver, in-process, no Docker required).
-        - ``true`` → all tests use real Docker Compose containers
-          (auto-managed by the ``live_mcp_stack`` fixture).
-
-        The ``E2E_MCP_*_URL`` fields are container connection credentials
-        forwarded into the Docker Compose stack via the env file — they play
-        no role in deciding stub vs. live mode.
+        Decision table
+        --------------
+        USE_TESTCONTAINERS=true  + USE_FAKE_LLM=false → live mode  (containers + real LLM)
+        USE_TESTCONTAINERS=true  + USE_FAKE_LLM=true  → live mode  (containers + FakeLLM)
+        USE_TESTCONTAINERS=false + anything            → stub mode  (in-process stub)
         """
         return self.USE_TESTCONTAINERS
+
+    @property
+    def configured_tc_services(self) -> list[str]:
+        """Docker Compose service names whose credentials are fully configured.
+
+        Only services with all required credentials present are included so
+        that ``docker compose up --wait`` is only called against services that
+        can actually pass their healthchecks.
+
+        Services are mapped as:
+          ``mcp-jira-e2e``    → requires ATLASSIAN_URL + ATLASSIAN_EMAIL + MCP_JIRA_TOKEN
+          ``mcp-clickup-e2e`` → requires MCP_CLICKUP_TOKEN
+          ``mcp-github-e2e``  → requires MCP_GITHUB_TOKEN
+          ``mcp-slack-e2e``   → requires MCP_SLACK_TOKEN
+
+        Returns an empty list when no service credentials are configured (i.e.
+        testcontainers mode was requested but no credentials are present).
+        """
+        services: list[str] = []
+        if self.MCP_CLICKUP_TOKEN:
+            services.append("mcp-clickup-e2e")
+        if self.MCP_GITHUB_TOKEN:
+            services.append("mcp-github-e2e")
+        if self.MCP_SLACK_TOKEN:
+            services.append("mcp-slack-e2e")
+        if self.ATLASSIAN_URL and self.ATLASSIAN_EMAIL and self.MCP_JIRA_TOKEN:
+            services.append("mcp-jira-e2e")
+        return services
 
     @property
     def llm_key_value(self) -> str | None:
