@@ -533,42 +533,20 @@ def mcp_stub(
 ) -> "MCPStubServer":
     """Return a ready-to-use ``MCPStubServer`` backed by ``pytest-httpserver``.
 
-    This fixture is the single canonical way for tests to obtain a stub MCP
-    server.  It enforces the mode contract:
+    This fixture provides a stub server that works in both modes:
 
-    - Stub mode (``USE_TESTCONTAINERS=false``, or ``USE_FAKE_LLM=true``):
-      wraps the in-process ``pytest-httpserver`` instance in an
-      ``MCPStubServer`` and returns it.  The agent connects to ``stub.url``
-      and all tool calls are recorded so that
-      ``stub.was_called("add_comment")`` assertions work.
+    - Stub mode (``USE_TESTCONTAINERS=false``): Agent connects to stub, 
+      all tool calls are recorded for assertions
 
-    - Live mode (``USE_TESTCONTAINERS=true``):
-      skips the test automatically.  In this mode the MCP layer is provided
-      by real Docker containers started by ``live_mcp_stack``; in-process
-      stub recording is not available, so stub-assertion tests cannot run.
-      The dedicated smoke test ``test_live_mcp_smoke.py`` covers live-container
-      connectivity.  ``E2E_USE_FAKE_LLM`` does not change this — when
-      containers are running the stub is always bypassed.
+    - Live mode (``USE_TESTCONTAINERS=true``): Agent connects to live containers,
+      but stub is still available for compatibility. Tests should use 
+      ``e2e_settings.USE_TESTCONTAINERS`` to conditionally run stub-specific
+      assertions.
 
-    Migration note
-    --------------
-    Replace ``stub = MCPStubServer(httpserver)`` in test bodies with a
-    ``mcp_stub`` fixture parameter::
-
-        def test_something(self, mcp_stub: MCPStubServer, ...):
-            stub = mcp_stub
-            url  = stub.url
-            ...
+    The fixture never skips tests - it's up to individual tests to handle
+    the different modes appropriately.
     """
-    # Skip whenever real containers are active — USE_TESTCONTAINERS=true means
-    # the MCP layer is Docker Compose, not the in-process stub, regardless of
-    # whether FakeLLM is also enabled.
-    if e2e_settings.USE_TESTCONTAINERS:
-        pytest.skip(
-            "Stub-assertion tests are skipped in testcontainers mode "
-            "(E2E_USE_TESTCONTAINERS=true).  Real Docker containers are used "
-            "for MCP instead; use test_live_mcp_smoke.py for live connectivity checks."
-        )
+    # Always return a stub server - tests can decide how to use it
     return MCPStubServer(httpserver)
 
 
