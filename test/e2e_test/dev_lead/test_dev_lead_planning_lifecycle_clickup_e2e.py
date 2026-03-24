@@ -36,57 +36,16 @@ from test.e2e_test.conftest import (
 
 from src.ticket.models import TicketComment, TicketRecord
 from src.ticket.workflow import WorkflowConfig
+from test.e2e_test.common.hybrid_mode import get_service_url, should_register_stub_tools, should_assert_stub_calls
+from test.e2e_test.common.test_infrastructure import make_settings, make_stub_tracker_registry_planning, build_dev_lead_registry
+from test.e2e_test.common.assertions import assert_stub_was_called, assert_stub_calls_count, assert_no_calls_in_stub_mode
+from test.e2e_test.common.state_management import reset_planning_state
 
 E2E_PLANNING_WORKFLOW_CONFIG = {
     **E2E_WORKFLOW_CONFIG,
     "open_for_dev": {"status_value": "OPEN", "human_only": False},
     "in_planning": {"status_value": "IN PLANNING", "human_only": True},
 }
-
-
-def _make_settings() -> Any:
-    s = MagicMock()
-    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = 300
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    s.MAX_CONCURRENT_DEV_AGENTS = 1
-    return s
-
-
-def _build_dev_lead_registry(dev_lead_agent: Any) -> Any:
-    from src.agents.registry import AgentRegistry
-
-    registry = AgentRegistry()
-    registry.register("dev_lead", dev_lead_agent)
-    return registry
-
-
-def _make_stub_tracker_registry(
-    open_tickets: list | None = None,
-    in_planning_tickets: list | None = None,
-    comments_by_ticket: dict | None = None,
-) -> Any:
-    _open = open_tickets or []
-    _planning = in_planning_tickets or []
-    _comments = comments_by_ticket or {}
-
-    class _StubTracker:
-        def fetch_tickets_for_operation(self, op: Any) -> list:
-            from src.ticket.workflow import WorkflowOperation
-
-            if op == WorkflowOperation.OPEN_FOR_DEV:
-                return _open
-            if op == WorkflowOperation.IN_PLANNING:
-                return _planning
-            return []
-
-        def fetch_ticket_comments(self, ticket_id: str) -> list:
-            return _comments.get(ticket_id, [])
-
-    class _StubTrackerRegistry:
-        def get(self, source: str) -> _StubTracker:
-            return _StubTracker()
-
-    return _StubTrackerRegistry()
 
 
 # ---------------------------------------------------------------------------
@@ -125,7 +84,7 @@ class TestDevLeadFeasibilityAssessment:
         from test.e2e_test.common.e2e_settings import get_e2e_settings
 
         dev_lead_agent = build_dev_lead_agent_against_stubs(url=url, e2e_settings=get_e2e_settings())
-        registry = _build_dev_lead_registry(dev_lead_agent)
+        registry = build_dev_lead_registry(dev_lead_agent)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
@@ -192,7 +151,7 @@ class TestDevLeadFetchesExistingTask:
         from test.e2e_test.common.e2e_settings import get_e2e_settings
 
         dev_lead_agent = build_dev_lead_agent_against_stubs(url=url, e2e_settings=get_e2e_settings())
-        registry = _build_dev_lead_registry(dev_lead_agent)
+        registry = build_dev_lead_registry(dev_lead_agent)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
@@ -278,7 +237,7 @@ class TestDevLeadBreakdown:
         from test.e2e_test.common.e2e_settings import get_e2e_settings
 
         dev_lead_agent = build_dev_lead_agent_against_stubs(url=url, e2e_settings=get_e2e_settings())
-        registry = _build_dev_lead_registry(dev_lead_agent)
+        registry = build_dev_lead_registry(dev_lead_agent)
 
         message = (
             "[dev lead] All questions answered — please break down cu-050 into sub-tasks. "
@@ -365,17 +324,16 @@ class TestDevAgentInitialPlan:
         )
         registry = build_e2e_registry(dev_agent)
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_planning(
                     open_tickets=[
                         TicketRecord(
                             id="cu-20", source="clickup", title="Implement OAuth2 login", url="", raw_status="OPEN"
@@ -460,17 +418,16 @@ class TestDevAgentPlanRevision:
             source="clickup",
         )
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_planning(
                     in_planning_tickets=[
                         TicketRecord(
                             id="cu-21", source="clickup", title="DB migration tool", url="", raw_status="IN PLANNING"
@@ -559,7 +516,7 @@ class TestFullPlanningLifecycle:
         from test.e2e_test.common.e2e_settings import get_e2e_settings
 
         dev_lead_agent = build_dev_lead_agent_against_stubs(url=url, e2e_settings=get_e2e_settings())
-        dev_lead_registry = _build_dev_lead_registry(dev_lead_agent)
+        dev_lead_registry = build_dev_lead_registry(dev_lead_agent)
 
         # Phase 1: Dev Lead breakdown
         message = (
@@ -612,17 +569,16 @@ class TestFullPlanningLifecycle:
         )
         dev_registry = build_e2e_registry(dev_agent)
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=dev_registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_planning(
                     open_tickets=[
                         TicketRecord(
                             id="cu-new-sub",
