@@ -23,13 +23,14 @@ import pytest
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 from test.e2e_test.conftest import (
+    E2E_WORKFLOW_CONFIG,
+    E2ESettings,
     MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
-    E2E_WORKFLOW_CONFIG,
-    E2ESettings,
 )
+
 from src.ticket.workflow import WorkflowConfig
 
 
@@ -47,13 +48,13 @@ def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
     Used to bypass the real REST API calls in ``scan_and_dispatch_job`` when
     running against the MCP stub server (E2E_USE_TESTCONTAINERS=false).
     """
-    from src.ticket.models import TicketRecord
 
     _tickets = list(accepted_tickets or [])
 
     class _StubTracker:
         def fetch_tickets_for_operation(self, op: Any) -> list:
             from src.ticket.workflow import WorkflowOperation
+
             if op == WorkflowOperation.SCAN_FOR_WORK:
                 return _tickets
             return []
@@ -72,6 +73,7 @@ def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
 # E2E-07: Dev picks up ACCEPTED ClickUp task, transitions statuses, opens PR
 # ===========================================================================
 
+
 @skip_without_llm
 class TestDevPicksUpAcceptedTicket:
     def test_dev_picks_up_accepted_and_opens_pr(
@@ -87,13 +89,13 @@ class TestDevPicksUpAcceptedTicket:
         from src.ticket.models import TicketRecord
 
         stub = mcp_stub
-        
+
         # Use appropriate URL based on mode
         if e2e_settings.USE_TESTCONTAINERS:
             url = mcp_urls["clickup"]
         else:
             url = stub.url
-            
+
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
         transition_calls: list = []
@@ -102,16 +104,27 @@ class TestDevPicksUpAcceptedTicket:
 
         # Only register tool handlers in stub mode
         if not e2e_settings.USE_TESTCONTAINERS:
-            stub.register_tool("search_tasks", lambda args: [
-                {"id": "cu-001", "name": "Implement login", "status": {"status": "ACCEPTED"},
-                 "url": "https://app.clickup.com/t/cu-001"},
-            ])
+            stub.register_tool(
+                "search_tasks",
+                lambda args: [
+                    {
+                        "id": "cu-001",
+                        "name": "Implement login",
+                        "status": {"status": "ACCEPTED"},
+                        "url": "https://app.clickup.com/t/cu-001",
+                    },
+                ],
+            )
             stub.register_tool("search_issues", lambda args: [])
-            stub.register_tool("get_task", lambda args: {
-                "id": "cu-001", "name": "Implement login feature",
-                "status": {"status": "ACCEPTED"},
-                "description": "Use OAuth2 with Google SSO.",
-            })
+            stub.register_tool(
+                "get_task",
+                lambda args: {
+                    "id": "cu-001",
+                    "name": "Implement login feature",
+                    "status": {"status": "ACCEPTED"},
+                    "description": "Use OAuth2 with Google SSO.",
+                },
+            )
 
             def _update_task(args: dict) -> dict:
                 status = str(args.get("status", args.get("fields", {}))).upper()
@@ -142,10 +155,17 @@ class TestDevPicksUpAcceptedTicket:
         registry = build_e2e_registry(dev_agent)
 
         # Bypass the real REST API — feed the ACCEPTED ticket directly.
-        tracker_registry = _make_stub_tracker_registry(accepted_tickets=[
-            TicketRecord(id="cu-001", source="clickup", title="Implement login",
-                         url="https://app.clickup.com/t/cu-001", raw_status="ACCEPTED"),
-        ])
+        tracker_registry = _make_stub_tracker_registry(
+            accepted_tickets=[
+                TicketRecord(
+                    id="cu-001",
+                    source="clickup",
+                    title="Implement login",
+                    url="https://app.clickup.com/t/cu-001",
+                    raw_status="ACCEPTED",
+                ),
+            ]
+        )
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
@@ -165,20 +185,21 @@ class TestDevPicksUpAcceptedTicket:
             assert len(pr_calls) > 0, "Expected LLM to call github/create_pull_request"
 
             in_progress_transitions = [
-                t for t in transition_calls
+                t
+                for t in transition_calls
                 if "IN PROGRESS" in str(t.get("params", "")).upper()
                 or "in progress" in str(t.get("params", "")).lower()
             ]
-            assert len(in_progress_transitions) > 0, (
-                f"Expected transition to IN PROGRESS. Got transitions: {transition_calls}"
-            )
+            assert (
+                len(in_progress_transitions) > 0
+            ), f"Expected transition to IN PROGRESS. Got transitions: {transition_calls}"
 
         # Live mode and stub mode: Check that PR was registered in watcher
         # In testcontainers mode with FakeLLM, this may not happen, so we make it conditional
         if not e2e_settings.USE_TESTCONTAINERS or not e2e_settings.USE_FAKE_LLM:
-            assert len(scan_mod._open_prs) > 0 or len(scan_mod._prs_under_review) > 0, (
-                "Expected PR to be registered in watcher dicts after execution"
-            )
+            assert (
+                len(scan_mod._open_prs) > 0 or len(scan_mod._prs_under_review) > 0
+            ), "Expected PR to be registered in watcher dicts after execution"
 
     def test_dev_never_writes_accepted(
         self,
@@ -193,16 +214,27 @@ class TestDevPicksUpAcceptedTicket:
 
         accepted_write_calls: list = []
 
-        stub.register_tool("search_tasks", lambda args: [
-            {"id": "cu-012", "name": "Auth feature", "status": {"status": "ACCEPTED"},
-             "url": "https://app.clickup.com/t/cu-012"},
-        ])
+        stub.register_tool(
+            "search_tasks",
+            lambda args: [
+                {
+                    "id": "cu-012",
+                    "name": "Auth feature",
+                    "status": {"status": "ACCEPTED"},
+                    "url": "https://app.clickup.com/t/cu-012",
+                },
+            ],
+        )
         stub.register_tool("search_issues", lambda args: [])
-        stub.register_tool("get_task", lambda args: {
-            "id": "cu-012", "name": "Auth feature",
-            "status": {"status": "ACCEPTED"},
-            "description": "OAuth2 with Google SSO.",
-        })
+        stub.register_tool(
+            "get_task",
+            lambda args: {
+                "id": "cu-012",
+                "name": "Auth feature",
+                "status": {"status": "ACCEPTED"},
+                "description": "OAuth2 with Google SSO.",
+            },
+        )
 
         def _update_task(args: dict) -> dict:
             status = str(args.get("status", args.get("fields", {}))).upper()
@@ -211,14 +243,21 @@ class TestDevPicksUpAcceptedTicket:
             return {"ok": True}
 
         stub.register_tool("update_task", _update_task)
-        stub.register_tool("create_pull_request", lambda args: {
-            "html_url": "https://github.com/org/repo/pull/43", "number": 43,
-        })
+        stub.register_tool(
+            "create_pull_request",
+            lambda args: {
+                "html_url": "https://github.com/org/repo/pull/43",
+                "number": 43,
+            },
+        )
         stub.register_tool("send_message", lambda args: {"ok": True})
         stub.register_tool("reply_to_thread", lambda args: {"ok": True})
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -234,14 +273,15 @@ class TestDevPicksUpAcceptedTicket:
         finally:
             executor.shutdown(wait=False)
 
-        assert len(accepted_write_calls) == 0, (
-            f"BR-1 VIOLATED: LLM wrote ACCEPTED status. Calls: {accepted_write_calls}"
-        )
+        assert (
+            len(accepted_write_calls) == 0
+        ), f"BR-1 VIOLATED: LLM wrote ACCEPTED status. Calls: {accepted_write_calls}"
 
 
 # ===========================================================================
 # E2E-08: Dev skips REJECTED ClickUp task (BR-3)
 # ===========================================================================
+
 
 @skip_without_llm
 class TestDevSkipsRejectedTicket:
@@ -259,11 +299,17 @@ class TestDevSkipsRejectedTicket:
         transition_calls: list = []
         pr_calls: list = []
 
-        stub.register_tool("search_tasks", lambda args: [
-            {"id": "cu-011", "name": "Cancelled feature",
-             "status": {"status": "REJECTED"},
-             "url": "https://app.clickup.com/t/cu-011"},
-        ])
+        stub.register_tool(
+            "search_tasks",
+            lambda args: [
+                {
+                    "id": "cu-011",
+                    "name": "Cancelled feature",
+                    "status": {"status": "REJECTED"},
+                    "url": "https://app.clickup.com/t/cu-011",
+                },
+            ],
+        )
         stub.register_tool("search_issues", lambda args: [])
 
         def _update_task(args: dict) -> dict:
@@ -279,7 +325,10 @@ class TestDevSkipsRejectedTicket:
         stub.register_tool("create_pull_request", _create_pr)
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
         executor = ThreadPoolExecutor(max_workers=1)
@@ -294,14 +343,13 @@ class TestDevSkipsRejectedTicket:
         finally:
             executor.shutdown(wait=False)
 
-        assert len(pr_calls) == 0, (
-            f"PR must NOT be created for REJECTED ticket. Got: {pr_calls}"
-        )
+        assert len(pr_calls) == 0, f"PR must NOT be created for REJECTED ticket. Got: {pr_calls}"
 
 
 # ===========================================================================
 # E2E-10: Ticket already IN PROGRESS not re-picked up on "restart"
 # ===========================================================================
+
 
 @skip_without_llm
 class TestInProgressTicketNotPickedUp:
@@ -334,7 +382,10 @@ class TestInProgressTicketNotPickedUp:
         stub.register_tool("create_pull_request", _create_pr)
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
         executor = ThreadPoolExecutor(max_workers=1)
@@ -349,7 +400,4 @@ class TestInProgressTicketNotPickedUp:
         finally:
             executor.shutdown(wait=False)
 
-        assert len(dispatched_tickets) == 0, (
-            "IN PROGRESS ticket must not be picked up (scan only targets ACCEPTED)"
-        )
-
+        assert len(dispatched_tickets) == 0, "IN PROGRESS ticket must not be picked up (scan only targets ACCEPTED)"

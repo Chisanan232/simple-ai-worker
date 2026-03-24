@@ -14,6 +14,7 @@ Usage::
     assert len(calls) > 0
     assert stub.was_called("add_comment")
 """
+
 from __future__ import annotations
 
 import json
@@ -62,59 +63,118 @@ class MCPStubServer:
 
     DEFAULT_TOOLS = [
         # JIRA
-        {"name": "search_issues", "description": "Search JIRA issues",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "get_issue", "description": "Get JIRA issue",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "transition_issue", "description": "Transition JIRA issue",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "add_comment", "description": "Add comment to ticket or task",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "update_issue", "description": "Update JIRA issue",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "create_issue", "description": "Create JIRA issue",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "link_issues", "description": "Link JIRA issues",
-         "inputSchema": {"type": "object", "properties": {}}},
+        {
+            "name": "search_issues",
+            "description": "Search JIRA issues",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {"name": "get_issue", "description": "Get JIRA issue", "inputSchema": {"type": "object", "properties": {}}},
+        {
+            "name": "transition_issue",
+            "description": "Transition JIRA issue",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "add_comment",
+            "description": "Add comment to ticket or task",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "update_issue",
+            "description": "Update JIRA issue",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "create_issue",
+            "description": "Create JIRA issue",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {"name": "link_issues", "description": "Link JIRA issues", "inputSchema": {"type": "object", "properties": {}}},
         # ClickUp
-        {"name": "search_tasks", "description": "Search ClickUp tasks",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "get_task", "description": "Get ClickUp task",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "update_task", "description": "Update ClickUp task",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "create_task", "description": "Create ClickUp task",
-         "inputSchema": {"type": "object", "properties": {}}},
+        {
+            "name": "search_tasks",
+            "description": "Search ClickUp tasks",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {"name": "get_task", "description": "Get ClickUp task", "inputSchema": {"type": "object", "properties": {}}},
+        {
+            "name": "update_task",
+            "description": "Update ClickUp task",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "create_task",
+            "description": "Create ClickUp task",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
         # GitHub
-        {"name": "create_pull_request", "description": "Create GitHub PR",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "get_pull_request", "description": "Get GitHub PR",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "merge_pull_request", "description": "Merge GitHub PR",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "get_pull_request_reviews", "description": "Get PR reviews",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "get_pull_request_comments", "description": "Get PR inline comments",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "reply_to_review_comment", "description": "Reply to a PR inline comment",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "approve_pull_request", "description": "Approve PR",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "submit_review", "description": "Submit PR review",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "create_commit", "description": "Create a commit",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "push_commits", "description": "Push commits",
-         "inputSchema": {"type": "object", "properties": {}}},
+        {
+            "name": "create_pull_request",
+            "description": "Create GitHub PR",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "get_pull_request",
+            "description": "Get GitHub PR",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "merge_pull_request",
+            "description": "Merge GitHub PR",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "get_pull_request_reviews",
+            "description": "Get PR reviews",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "get_pull_request_comments",
+            "description": "Get PR inline comments",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "reply_to_review_comment",
+            "description": "Reply to a PR inline comment",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "approve_pull_request",
+            "description": "Approve PR",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "submit_review",
+            "description": "Submit PR review",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "create_commit",
+            "description": "Create a commit",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {"name": "push_commits", "description": "Push commits", "inputSchema": {"type": "object", "properties": {}}},
         # Slack
-        {"name": "get_messages", "description": "Get Slack channel/thread messages",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "reply_to_thread", "description": "Reply in a Slack thread",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "send_message", "description": "Send a Slack message",
-         "inputSchema": {"type": "object", "properties": {}}},
-        {"name": "get_thread_permalink", "description": "Get Slack thread permalink",
-         "inputSchema": {"type": "object", "properties": {}}},
+        {
+            "name": "get_messages",
+            "description": "Get Slack channel/thread messages",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "reply_to_thread",
+            "description": "Reply in a Slack thread",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "send_message",
+            "description": "Send a Slack message",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
+        {
+            "name": "get_thread_permalink",
+            "description": "Get Slack thread permalink",
+            "inputSchema": {"type": "object", "properties": {}},
+        },
     ]
 
     def __init__(self, server: HTTPServer) -> None:
@@ -145,11 +205,14 @@ class MCPStubServer:
         method = body.get("method", "")
 
         if method == "initialize":
-            return self._ok(req_id, {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"tools": {}},
-                "serverInfo": {"name": "e2e-stub", "version": "1.0.0"},
-            })
+            return self._ok(
+                req_id,
+                {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "e2e-stub", "version": "1.0.0"},
+                },
+            )
 
         if method == "notifications/initialized":
             return Response("", status=200)
@@ -168,10 +231,13 @@ class MCPStubServer:
                 try:
                     result = handler(arguments)
                 except Exception as exc:
-                    return self._ok(req_id, {
-                        "content": [{"type": "text", "text": str(exc)}],
-                        "isError": True,
-                    })
+                    return self._ok(
+                        req_id,
+                        {
+                            "content": [{"type": "text", "text": str(exc)}],
+                            "isError": True,
+                        },
+                    )
                 return self._ok(req_id, _tool_result(result))
 
             # Default: return empty success for unregistered tools.
@@ -215,4 +281,3 @@ class MCPStubServer:
 
 # Backward-compatibility alias used by some existing test files.
 RecordingStub = MCPStubServer
-

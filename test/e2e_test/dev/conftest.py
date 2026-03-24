@@ -1,9 +1,6 @@
 """Dev Agent E2E test fixtures — Layer 3."""
+
 from __future__ import annotations
-
-from typing import Any, Generator, Optional
-
-import pytest
 
 from test.e2e_test.conftest import (
     E2ESettings,
@@ -11,6 +8,9 @@ from test.e2e_test.conftest import (
     build_dev_agent_against_stubs,
     build_e2e_registry,
 )
+from typing import Any, Generator, Optional
+
+import pytest
 
 
 @pytest.fixture
@@ -159,5 +159,3 @@ def pr_timeout_tool_order(fake_llm_session: Optional[FakeLLM]) -> Generator[None
     if fake_llm_session is not None:
         fake_llm_session.set_tool_order("get_pull_request_reviews")
     yield
-
-

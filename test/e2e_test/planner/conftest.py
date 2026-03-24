@@ -1,16 +1,16 @@
 """Planner Agent E2E test fixtures — Layer 3."""
+
 from __future__ import annotations
-
-from typing import Any, Generator, Optional
-
-import pytest
 
 from test.e2e_test.conftest import (
     E2ESettings,
     FakeLLM,
-    build_planner_agent_against_stubs,
     build_e2e_registry,
+    build_planner_agent_against_stubs,
 )
+from typing import Any, Generator, Optional
+
+import pytest
 
 
 @pytest.fixture
@@ -64,5 +64,3 @@ def reply_to_thread_tool_order(fake_llm_session: Optional[FakeLLM]) -> Generator
     if fake_llm_session is not None:
         fake_llm_session.set_tool_order("reply_to_thread")
     yield
-
-

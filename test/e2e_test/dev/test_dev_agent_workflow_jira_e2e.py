@@ -22,17 +22,18 @@ pytestmark = [
     pytest.mark.slow,
 ]
 
+from test.e2e_test.common.e2e_settings import get_e2e_settings
 from test.e2e_test.conftest import (
+    E2E_WORKFLOW_CONFIG,
+    E2ESettings,
     MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
-    E2E_WORKFLOW_CONFIG,
-    E2ESettings,
 )
-from test.e2e_test.common.e2e_settings import get_e2e_settings
-from src.ticket.workflow import WorkflowConfig
+
 from src.ticket.models import TicketRecord
+from src.ticket.workflow import WorkflowConfig
 
 
 def _make_e2e_settings(timeout: int = 300) -> Any:
@@ -54,6 +55,7 @@ def _make_stub_tracker_registry(accepted_tickets: list[TicketRecord] | None = No
     class _StubTracker:
         def fetch_tickets_for_operation(self, op: Any) -> list:
             from src.ticket.workflow import WorkflowOperation
+
             if op == WorkflowOperation.SCAN_FOR_WORK:
                 return _tickets
             return []
@@ -72,6 +74,7 @@ def _make_stub_tracker_registry(accepted_tickets: list[TicketRecord] | None = No
 # E2E-07: Dev picks up ACCEPTED JIRA issue, transitions statuses, opens PR
 # ===========================================================================
 
+
 @skip_without_llm
 class TestDevPicksUpAcceptedTicket:
     def test_dev_picks_up_accepted_and_opens_pr(
@@ -85,13 +88,13 @@ class TestDevPicksUpAcceptedTicket:
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
         stub = mcp_stub
-        
+
         # Use appropriate URL based on mode
         if e2e_settings.USE_TESTCONTAINERS:
             url = mcp_urls["jira"]
         else:
             url = stub.url
-            
+
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
         transition_calls: list = []
@@ -100,17 +103,24 @@ class TestDevPicksUpAcceptedTicket:
 
         # Only register tool handlers in stub mode
         if not e2e_settings.USE_TESTCONTAINERS:
-            stub.register_tool("search_issues", lambda args: [
-                {"key": "PROJ-10", "fields": {"summary": "Implement login",
-                                               "status": {"name": "ACCEPTED"}}},
-            ])
+            stub.register_tool(
+                "search_issues",
+                lambda args: [
+                    {"key": "PROJ-10", "fields": {"summary": "Implement login", "status": {"name": "ACCEPTED"}}},
+                ],
+            )
             stub.register_tool("search_tasks", lambda args: [])
-            stub.register_tool("get_issue", lambda args: {
-                "key": "PROJ-10",
-                "fields": {"summary": "Implement login feature",
-                           "status": {"name": "ACCEPTED"},
-                           "description": "Use OAuth2 with Google SSO."},
-            })
+            stub.register_tool(
+                "get_issue",
+                lambda args: {
+                    "key": "PROJ-10",
+                    "fields": {
+                        "summary": "Implement login feature",
+                        "status": {"name": "ACCEPTED"},
+                        "description": "Use OAuth2 with Google SSO.",
+                    },
+                },
+            )
 
             def _transition_issue(args: dict) -> dict:
                 status = str(args.get("status", args.get("transition", ""))).upper()
@@ -141,10 +151,17 @@ class TestDevPicksUpAcceptedTicket:
         registry = build_e2e_registry(dev_agent)
 
         # Bypass the real REST API — feed the ACCEPTED ticket directly.
-        tracker_registry = _make_stub_tracker_registry(accepted_tickets=[
-            TicketRecord(id="PROJ-10", source="jira", title="Implement login",
-                         url="https://test.atlassian.net/browse/PROJ-10", raw_status="ACCEPTED"),
-        ])
+        tracker_registry = _make_stub_tracker_registry(
+            accepted_tickets=[
+                TicketRecord(
+                    id="PROJ-10",
+                    source="jira",
+                    title="Implement login",
+                    url="https://test.atlassian.net/browse/PROJ-10",
+                    raw_status="ACCEPTED",
+                ),
+            ]
+        )
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
@@ -181,16 +198,24 @@ class TestDevPicksUpAcceptedTicket:
 
         accepted_write_calls: list = []
 
-        stub.register_tool("search_issues", lambda args: [
-            {"key": "PROJ-12", "fields": {"summary": "Auth feature",
-                                           "status": {"name": "ACCEPTED"}}},
-        ])
+        stub.register_tool(
+            "search_issues",
+            lambda args: [
+                {"key": "PROJ-12", "fields": {"summary": "Auth feature", "status": {"name": "ACCEPTED"}}},
+            ],
+        )
         stub.register_tool("search_tasks", lambda args: [])
-        stub.register_tool("get_issue", lambda args: {
-            "key": "PROJ-12",
-            "fields": {"summary": "Auth feature", "status": {"name": "ACCEPTED"},
-                       "description": "OAuth2 with Google SSO."},
-        })
+        stub.register_tool(
+            "get_issue",
+            lambda args: {
+                "key": "PROJ-12",
+                "fields": {
+                    "summary": "Auth feature",
+                    "status": {"name": "ACCEPTED"},
+                    "description": "OAuth2 with Google SSO.",
+                },
+            },
+        )
 
         def _transition_issue(args: dict) -> dict:
             status = str(args.get("status", args.get("transition", ""))).upper()
@@ -199,14 +224,21 @@ class TestDevPicksUpAcceptedTicket:
             return {"ok": True}
 
         stub.register_tool("transition_issue", _transition_issue)
-        stub.register_tool("create_pull_request", lambda args: {
-            "html_url": "https://github.com/org/repo/pull/43", "number": 43,
-        })
+        stub.register_tool(
+            "create_pull_request",
+            lambda args: {
+                "html_url": "https://github.com/org/repo/pull/43",
+                "number": 43,
+            },
+        )
         stub.register_tool("send_message", lambda args: {"ok": True})
         stub.register_tool("reply_to_thread", lambda args: {"ok": True})
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
             e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
@@ -223,14 +255,15 @@ class TestDevPicksUpAcceptedTicket:
         finally:
             executor.shutdown(wait=False)
 
-        assert len(accepted_write_calls) == 0, (
-            f"BR-1 VIOLATED: LLM wrote ACCEPTED status. Calls: {accepted_write_calls}"
-        )
+        assert (
+            len(accepted_write_calls) == 0
+        ), f"BR-1 VIOLATED: LLM wrote ACCEPTED status. Calls: {accepted_write_calls}"
 
 
 # ===========================================================================
 # E2E-08: Dev skips REJECTED JIRA issue (BR-3)
 # ===========================================================================
+
 
 @skip_without_llm
 class TestDevSkipsRejectedTicket:
@@ -247,10 +280,12 @@ class TestDevSkipsRejectedTicket:
 
         pr_calls: list = []
 
-        stub.register_tool("search_issues", lambda args: [
-            {"key": "PROJ-11", "fields": {"summary": "Cancelled feature",
-                                           "status": {"name": "REJECTED"}}},
-        ])
+        stub.register_tool(
+            "search_issues",
+            lambda args: [
+                {"key": "PROJ-11", "fields": {"summary": "Cancelled feature", "status": {"name": "REJECTED"}}},
+            ],
+        )
         stub.register_tool("search_tasks", lambda args: [])
         stub.register_tool("transition_issue", lambda args: {"ok": True})
 
@@ -261,7 +296,10 @@ class TestDevSkipsRejectedTicket:
         stub.register_tool("create_pull_request", _create_pr)
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
             e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
@@ -277,14 +315,13 @@ class TestDevSkipsRejectedTicket:
         finally:
             executor.shutdown(wait=False)
 
-        assert len(pr_calls) == 0, (
-            f"PR must NOT be created for REJECTED ticket. Got: {pr_calls}"
-        )
+        assert len(pr_calls) == 0, f"PR must NOT be created for REJECTED ticket. Got: {pr_calls}"
 
 
 # ===========================================================================
 # E2E-10: Ticket already IN PROGRESS not re-picked up on "restart"
 # ===========================================================================
+
 
 @skip_without_llm
 class TestInProgressTicketNotPickedUp:
@@ -317,7 +354,10 @@ class TestInProgressTicketNotPickedUp:
         stub.register_tool("create_pull_request", _create_pr)
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
             e2e_settings=get_e2e_settings(),
         )
         registry = build_e2e_registry(dev_agent)
@@ -333,8 +373,4 @@ class TestInProgressTicketNotPickedUp:
         finally:
             executor.shutdown(wait=False)
 
-        assert len(dispatched_tickets) == 0, (
-            "IN PROGRESS ticket must not be picked up (scan only targets ACCEPTED)"
-        )
-
-
+        assert len(dispatched_tickets) == 0, "IN PROGRESS ticket must not be picked up (scan only targets ACCEPTED)"

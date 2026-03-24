@@ -16,6 +16,7 @@ Usage in ``test/e2e_test/conftest.py``::
     def e2e_settings() -> E2ESettings:
         return _e2e_settings
 """
+
 from __future__ import annotations
 
 import functools
@@ -216,4 +217,3 @@ def get_e2e_settings() -> E2ESettings:
     Call ``get_e2e_settings.cache_clear()`` to force re-evaluation.
     """
     return E2ESettings()
-

@@ -67,13 +67,16 @@ from typing import Any, Generator, Optional
 # working directory from which pytest is invoked.
 _PROJECT_ROOT: Path = Path(__file__).parents[2]
 
-import pytest
-from pytest_httpserver import HTTPServer
-from pydantic import SecretStr
-
 from test.e2e_test.common.e2e_settings import E2ESettings, get_e2e_settings
-from test.e2e_test.common.fake_llm import FakeLLM  # noqa: F401 — re-exported for sub-conftest use
+from test.e2e_test.common.fake_llm import (  # noqa: F401 — re-exported for sub-conftest use
+    FakeLLM,
+)
 from test.e2e_test.common.mcp_stub import MCPStubServer, RecordingStub  # noqa: F401
+
+import pytest
+from pydantic import SecretStr
+from pytest_httpserver import HTTPServer
+
 from src.ticket.workflow import WorkflowConfig
 
 # Load E2E settings once at module level — before any monkeypatching.
@@ -97,17 +100,13 @@ _LLM_KEY_AVAILABLE: bool = _e2e_settings.has_llm_key
 skip_without_llm = pytest.mark.skipif(
     not get_e2e_settings().has_llm_key,
     reason=(
-        "E2E tests require OPENAI_API_KEY, ANTHROPIC_API_KEY, "
-        "or E2E_USE_FAKE_LLM=true in test/e2e_test/.env.e2e"
+        "E2E tests require OPENAI_API_KEY, ANTHROPIC_API_KEY, " "or E2E_USE_FAKE_LLM=true in test/e2e_test/.env.e2e"
     ),
 )
 
 skip_without_live_services = pytest.mark.skipif(
     not _e2e_settings.is_live_mode,
-    reason=(
-        "Live E2E tests require E2E_MCP_*_URL values set "
-        "in test/e2e_test/.env.e2e"
-    ),
+    reason=("Live E2E tests require E2E_MCP_*_URL values set " "in test/e2e_test/.env.e2e"),
 )
 
 # ---------------------------------------------------------------------------
@@ -115,13 +114,13 @@ skip_without_live_services = pytest.mark.skipif(
 # ---------------------------------------------------------------------------
 
 E2E_WORKFLOW_CONFIG: dict = {
-    "scan_for_work":       {"status_value": "ACCEPTED",    "human_only": True},
-    "skip_rejected":       {"status_value": "REJECTED"},
-    "open_for_dev":        {"status_value": "OPEN",        "human_only": False},
-    "in_planning":         {"status_value": "IN PLANNING", "human_only": True},
-    "start_development":   {"status_value": "IN PROGRESS"},
-    "open_for_review":     {"status_value": "IN REVIEW"},
-    "mark_complete":       {"status_value": "COMPLETE"},
+    "scan_for_work": {"status_value": "ACCEPTED", "human_only": True},
+    "skip_rejected": {"status_value": "REJECTED"},
+    "open_for_dev": {"status_value": "OPEN", "human_only": False},
+    "in_planning": {"status_value": "IN PLANNING", "human_only": True},
+    "start_development": {"status_value": "IN PROGRESS"},
+    "open_for_review": {"status_value": "IN REVIEW"},
+    "mark_complete": {"status_value": "COMPLETE"},
     "update_with_context": {"status_value": ""},
 }
 
@@ -141,8 +140,7 @@ def _e2e_require_llm_key(request: pytest.FixtureRequest) -> None:
     """
     if request.node.get_closest_marker("e2e") and not get_e2e_settings().has_llm_key:
         pytest.skip(
-            "E2E tests require OPENAI_API_KEY, ANTHROPIC_API_KEY, "
-            "or E2E_USE_FAKE_LLM=true in test/e2e_test/.env.e2e"
+            "E2E tests require OPENAI_API_KEY, ANTHROPIC_API_KEY, " "or E2E_USE_FAKE_LLM=true in test/e2e_test/.env.e2e"
         )
 
 
@@ -153,6 +151,7 @@ def e2e_state_reset() -> Generator[None, None, None]:
     def _clear() -> None:
         try:
             import src.scheduler.jobs.scan_tickets as m
+
             m._in_progress_tickets.clear()
             m._open_prs.clear()
             m._prs_under_review.clear()
@@ -161,12 +160,14 @@ def e2e_state_reset() -> Generator[None, None, None]:
 
         try:
             import src.scheduler.jobs.pr_review_comment_handler as m
+
             m._in_progress_comment_fixes.clear()
         except (ImportError, AttributeError):
             pass
 
         try:
             import src.scheduler.jobs.plan_and_notify as m
+
             m._in_planning_tickets.clear()
             m._plan_comment_watermarks.clear()
         except (ImportError, AttributeError):
@@ -187,6 +188,7 @@ def _fake_llm_reset() -> Generator[None, None, None]:
     do not affect subsequent tests.
     """
     import test.e2e_test.conftest as _self
+
     llm = _self._session_fake_llm
     if llm is not None:
         saved_tool_order = list(llm._tool_order)
@@ -278,6 +280,7 @@ def live_mcp_stack(e2e_settings: E2ESettings) -> Generator[dict[str, str], None,
         )
 
     import warnings
+
     warnings.warn(
         f"[E2E] Testcontainers mode: starting services {services_to_start}",
         stacklevel=2,
@@ -321,10 +324,10 @@ def live_mcp_stack(e2e_settings: E2ESettings) -> Generator[dict[str, str], None,
     #   ClickUp  → Legacy SSE       → path=/sse, type=sse
     #   Slack    → Legacy SSE       → path=/sse, type=sse
     _SERVICE_MAP = {
-        "mcp-jira-e2e":    ("jira",    18100, "/sse"),
+        "mcp-jira-e2e": ("jira", 18100, "/sse"),
         "mcp-clickup-e2e": ("clickup", 18101, "/sse/sse"),
-        "mcp-github-e2e":  ("github",  18102, "/mcp"),
-        "mcp-slack-e2e":   ("slack",   18103, "/sse"),
+        "mcp-github-e2e": ("github", 18102, "/mcp"),
+        "mcp-slack-e2e": ("slack", 18103, "/sse"),
     }
 
     urls: dict[str, str] = {}
@@ -357,12 +360,17 @@ def _full_compose_down(project_root: Path) -> None:
     partially-started containers and the shared network are always cleaned up.
     """
     import subprocess
+
     subprocess.run(
         [
-            "docker", "compose",
-            "-f", "test/e2e_test/docker-compose.e2e.yml",
-            "--env-file", "test/e2e_test/.env.e2e",
-            "down", "--volumes",
+            "docker",
+            "compose",
+            "-f",
+            "test/e2e_test/docker-compose.e2e.yml",
+            "--env-file",
+            "test/e2e_test/.env.e2e",
+            "down",
+            "--volumes",
         ],
         cwd=str(project_root),
         capture_output=True,
@@ -406,6 +414,7 @@ def _maybe_patch_llm_factory(
 
     # Store on module so fake_llm_session can retrieve it.
     import test.e2e_test.conftest as _self
+
     _self._session_fake_llm = _shared_fake_llm
 
     with patch(
@@ -442,6 +451,7 @@ def fake_llm_session(e2e_settings: E2ESettings) -> Optional[FakeLLM]:
                 pytest.skip("fake LLM not active")
     """
     import test.e2e_test.conftest as _self
+
     return _self._session_fake_llm
 
 
@@ -511,10 +521,10 @@ def mcp_urls(
         # For services not configured (absent from live_mcp_stack), fall back
         # to the stub URL so agents can still be constructed without error.
         return {
-            "jira":    live_mcp_stack.get("jira",    stub_url),
+            "jira": live_mcp_stack.get("jira", stub_url),
             "clickup": live_mcp_stack.get("clickup", stub_url),
-            "github":  live_mcp_stack.get("github",  stub_url),
-            "slack":   live_mcp_stack.get("slack",   stub_url),
+            "github": live_mcp_stack.get("github", stub_url),
+            "slack": live_mcp_stack.get("slack", stub_url),
         }
 
     # Stub mode: FakeLLM-only or no flags set.
@@ -535,11 +545,11 @@ def mcp_stub(
 
     This fixture provides a stub server that works in both modes:
 
-    - Stub mode (``USE_TESTCONTAINERS=false``): Agent connects to stub, 
+    - Stub mode (``USE_TESTCONTAINERS=false``): Agent connects to stub,
       all tool calls are recorded for assertions
 
     - Live mode (``USE_TESTCONTAINERS=true``): Agent connects to live containers,
-      but stub is still available for compatibility. Tests should use 
+      but stub is still available for compatibility. Tests should use
       ``e2e_settings.USE_TESTCONTAINERS`` to conditionally run stub-specific
       assertions.
 
@@ -637,8 +647,10 @@ def build_dev_agent_against_stubs(
     injected = _inject_llm_key(settings_obj)
     try:
         settings_kwargs: dict = dict(
-            MCP_JIRA_URL=jira_url, MCP_CLICKUP_URL=clickup_url,
-            MCP_GITHUB_URL=github_url, MCP_SLACK_URL=slack_url,
+            MCP_JIRA_URL=jira_url,
+            MCP_CLICKUP_URL=clickup_url,
+            MCP_GITHUB_URL=github_url,
+            MCP_SLACK_URL=slack_url,
         )
         settings_kwargs.update(_mcp_credentials_kwargs(settings_obj))
         llm_key = settings_obj.llm_key_value
@@ -650,61 +662,77 @@ def build_dev_agent_against_stubs(
             "process": "sequential",
             "mcp_servers": {
                 "jira": {
-                    "type": _mcp_type_for_url(jira_url), "url": jira_url,
+                    "type": _mcp_type_for_url(jira_url),
+                    "url": jira_url,
                     "tool_filter": [
-                        "search_issues", "get_issue", "transition_issue",
-                        "add_comment", "update_issue",
+                        "search_issues",
+                        "get_issue",
+                        "transition_issue",
+                        "add_comment",
+                        "update_issue",
                     ],
                     "cache_tools_list": False,
                 },
                 "clickup": {
-                    "type": _mcp_type_for_url(clickup_url), "url": clickup_url,
+                    "type": _mcp_type_for_url(clickup_url),
+                    "url": clickup_url,
                     "tool_filter": [
-                        "search_tasks", "get_task", "update_task", "add_comment",
+                        "search_tasks",
+                        "get_task",
+                        "update_task",
+                        "add_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "github": {
-                    "type": _mcp_type_for_url(github_url), "url": github_url,
+                    "type": _mcp_type_for_url(github_url),
+                    "url": github_url,
                     "tool_filter": [
-                        "create_pull_request", "get_pull_request", "merge_pull_request",
-                        "get_pull_request_reviews", "get_pull_request_comments",
+                        "create_pull_request",
+                        "get_pull_request",
+                        "merge_pull_request",
+                        "get_pull_request_reviews",
+                        "get_pull_request_comments",
                         "reply_to_review_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "slack": {
-                    "type": _mcp_type_for_url(slack_url), "url": slack_url,
+                    "type": _mcp_type_for_url(slack_url),
+                    "url": slack_url,
                     "tool_filter": [
-                        "send_message", "reply_to_thread", "get_messages",
+                        "send_message",
+                        "reply_to_thread",
+                        "get_messages",
                         "get_thread_permalink",
                     ],
                     "cache_tools_list": False,
                 },
             },
-            "agents": [{
-                "id": "dev_agent",
-                "role": "Software Developer",
-                "goal": (
-                    "Scan for ready development tickets, implement them, open GitHub pull "
-                    "requests, and update ticket status for human review."
-                ),
-                "backstory": (
-                    "You are a skilled software developer who thrives in an "
-                    "autonomous, pull-based workflow."
-                ),
-                "llm": {
-                    "provider": settings_obj.LLM_PROVIDER,
-                    "model": settings_obj.LLM_MODEL,
-                },
-                "mcps": ["jira", "clickup", "github", "slack"],
-                "apps": [], "allow_delegation": False, "verbose": False,
-            }],
+            "agents": [
+                {
+                    "id": "dev_agent",
+                    "role": "Software Developer",
+                    "goal": (
+                        "Scan for ready development tickets, implement them, open GitHub pull "
+                        "requests, and update ticket status for human review."
+                    ),
+                    "backstory": (
+                        "You are a skilled software developer who thrives in an " "autonomous, pull-based workflow."
+                    ),
+                    "llm": {
+                        "provider": settings_obj.LLM_PROVIDER,
+                        "model": settings_obj.LLM_MODEL,
+                    },
+                    "mcps": ["jira", "clickup", "github", "slack"],
+                    "apps": [],
+                    "allow_delegation": False,
+                    "verbose": False,
+                }
+            ],
         }
         team_config = AgentTeamConfig.model_validate(raw_config)
-        return AgentFactory.build(
-            team_config.agents[0], settings, mcp_servers=team_config.mcp_servers
-        )
+        return AgentFactory.build(team_config.agents[0], settings, mcp_servers=team_config.mcp_servers)
     finally:
         _restore_env(injected)
 
@@ -719,8 +747,10 @@ def build_planner_agent_against_stubs(url: str, e2e_settings: Optional[E2ESettin
     injected = _inject_llm_key(settings_obj)
     try:
         settings_kwargs: dict = dict(
-            MCP_JIRA_URL=url, MCP_CLICKUP_URL=url,
-            MCP_GITHUB_URL=url, MCP_SLACK_URL=url,
+            MCP_JIRA_URL=url,
+            MCP_CLICKUP_URL=url,
+            MCP_GITHUB_URL=url,
+            MCP_SLACK_URL=url,
         )
         settings_kwargs.update(_mcp_credentials_kwargs(settings_obj))
         settings_kwargs.update(_mcp_credentials_kwargs(settings_obj))
@@ -733,49 +763,60 @@ def build_planner_agent_against_stubs(url: str, e2e_settings: Optional[E2ESettin
             "process": "sequential",
             "mcp_servers": {
                 "jira": {
-                    "type": _mcp_type_for_url(url), "url": url,
+                    "type": _mcp_type_for_url(url),
+                    "url": url,
                     "tool_filter": [
-                        "create_issue", "search_issues", "update_issue",
-                        "transition_issue", "add_comment",
+                        "create_issue",
+                        "search_issues",
+                        "update_issue",
+                        "transition_issue",
+                        "add_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "clickup": {
-                    "type": _mcp_type_for_url(url), "url": url,
+                    "type": _mcp_type_for_url(url),
+                    "url": url,
                     "tool_filter": [
-                        "create_task", "search_tasks", "update_task", "add_comment",
+                        "create_task",
+                        "search_tasks",
+                        "update_task",
+                        "add_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "slack": {
-                    "type": _mcp_type_for_url(url), "url": url,
+                    "type": _mcp_type_for_url(url),
+                    "url": url,
                     "tool_filter": ["send_message", "reply_to_thread", "get_messages"],
                     "cache_tools_list": False,
                 },
             },
-            "agents": [{
-                "id": "planner",
-                "role": "Product Planner",
-                "goal": (
-                    "Survey and discuss product ideas with human stakeholders; "
-                    "create detailed planning documents; manage accept/reject outcomes."
-                ),
-                "backstory": (
-                    "You are a seasoned product planner with 10+ years of experience "
-                    "in agile software development, market research, and business modelling."
-                ),
-                "llm": {
-                    "provider": settings_obj.LLM_PROVIDER,
-                    "model": settings_obj.LLM_MODEL,
-                },
-                "mcps": ["jira", "clickup", "slack"],
-                "apps": [], "allow_delegation": False, "verbose": False,
-            }],
+            "agents": [
+                {
+                    "id": "planner",
+                    "role": "Product Planner",
+                    "goal": (
+                        "Survey and discuss product ideas with human stakeholders; "
+                        "create detailed planning documents; manage accept/reject outcomes."
+                    ),
+                    "backstory": (
+                        "You are a seasoned product planner with 10+ years of experience "
+                        "in agile software development, market research, and business modelling."
+                    ),
+                    "llm": {
+                        "provider": settings_obj.LLM_PROVIDER,
+                        "model": settings_obj.LLM_MODEL,
+                    },
+                    "mcps": ["jira", "clickup", "slack"],
+                    "apps": [],
+                    "allow_delegation": False,
+                    "verbose": False,
+                }
+            ],
         }
         team_config = AgentTeamConfig.model_validate(raw_config)
-        return AgentFactory.build(
-            team_config.agents[0], settings, mcp_servers=team_config.mcp_servers
-        )
+        return AgentFactory.build(team_config.agents[0], settings, mcp_servers=team_config.mcp_servers)
     finally:
         _restore_env(injected)
 
@@ -790,8 +831,10 @@ def build_dev_lead_agent_against_stubs(url: str, e2e_settings: Optional[E2ESetti
     injected = _inject_llm_key(settings_obj)
     try:
         settings_kwargs: dict = dict(
-            MCP_JIRA_URL=url, MCP_CLICKUP_URL=url,
-            MCP_GITHUB_URL=url, MCP_SLACK_URL=url,
+            MCP_JIRA_URL=url,
+            MCP_CLICKUP_URL=url,
+            MCP_GITHUB_URL=url,
+            MCP_SLACK_URL=url,
         )
         llm_key = settings_obj.llm_key_value
         if llm_key:
@@ -802,50 +845,63 @@ def build_dev_lead_agent_against_stubs(url: str, e2e_settings: Optional[E2ESetti
             "process": "sequential",
             "mcp_servers": {
                 "jira": {
-                    "type": _mcp_type_for_url(url), "url": url,
+                    "type": _mcp_type_for_url(url),
+                    "url": url,
                     "tool_filter": [
-                        "get_issue", "search_issues", "create_issue",
-                        "update_issue", "link_issues", "transition_issue", "add_comment",
+                        "get_issue",
+                        "search_issues",
+                        "create_issue",
+                        "update_issue",
+                        "link_issues",
+                        "transition_issue",
+                        "add_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "clickup": {
-                    "type": _mcp_type_for_url(url), "url": url,
+                    "type": _mcp_type_for_url(url),
+                    "url": url,
                     "tool_filter": [
-                        "get_task", "search_tasks", "create_task",
-                        "update_task", "add_comment",
+                        "get_task",
+                        "search_tasks",
+                        "create_task",
+                        "update_task",
+                        "add_comment",
                     ],
                     "cache_tools_list": False,
                 },
                 "slack": {
-                    "type": _mcp_type_for_url(url), "url": url,
+                    "type": _mcp_type_for_url(url),
+                    "url": url,
                     "tool_filter": ["send_message", "reply_to_thread", "get_messages"],
                     "cache_tools_list": False,
                 },
             },
-            "agents": [{
-                "id": "dev_lead",
-                "role": "Technical Dev Lead",
-                "goal": (
-                    "Assess feasibility of requirements, ask clarifying questions, "
-                    "break down epics into sub-tasks with dependencies."
-                ),
-                "backstory": (
-                    "You are a senior software engineer and tech lead specialising "
-                    "in system design, task decomposition, and agile estimation."
-                ),
-                "llm": {
-                    "provider": settings_obj.LLM_PROVIDER,
-                    "model": settings_obj.LLM_MODEL,
-                },
-                "mcps": ["jira", "clickup", "slack"],
-                "apps": [], "allow_delegation": False, "verbose": False,
-            }],
+            "agents": [
+                {
+                    "id": "dev_lead",
+                    "role": "Technical Dev Lead",
+                    "goal": (
+                        "Assess feasibility of requirements, ask clarifying questions, "
+                        "break down epics into sub-tasks with dependencies."
+                    ),
+                    "backstory": (
+                        "You are a senior software engineer and tech lead specialising "
+                        "in system design, task decomposition, and agile estimation."
+                    ),
+                    "llm": {
+                        "provider": settings_obj.LLM_PROVIDER,
+                        "model": settings_obj.LLM_MODEL,
+                    },
+                    "mcps": ["jira", "clickup", "slack"],
+                    "apps": [],
+                    "allow_delegation": False,
+                    "verbose": False,
+                }
+            ],
         }
         team_config = AgentTeamConfig.model_validate(raw_config)
-        return AgentFactory.build(
-            team_config.agents[0], settings, mcp_servers=team_config.mcp_servers
-        )
+        return AgentFactory.build(team_config.agents[0], settings, mcp_servers=team_config.mcp_servers)
     finally:
         _restore_env(injected)
 
@@ -857,4 +913,3 @@ def build_e2e_registry(agent: Any, role_id: str = "dev_agent") -> Any:
     registry = AgentRegistry()
     registry.register(role_id, agent)
     return registry
-

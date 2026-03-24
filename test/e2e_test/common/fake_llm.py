@@ -124,11 +124,7 @@ class FakeLLM(BaseLLM):
         - Always return the plain-text final answer.
         """
         # Flatten all message content into a single searchable string.
-        prompt = " ".join(
-            str(m.get("content", ""))
-            for m in messages
-            if isinstance(m, dict) and m.get("content")
-        )
+        prompt = " ".join(str(m.get("content", "")) for m in messages if isinstance(m, dict) and m.get("content"))
 
         self._call_log.append({"messages": messages, "tools": tools, "prompt": prompt})
         logger.debug(
@@ -146,7 +142,9 @@ class FakeLLM(BaseLLM):
                     if role in ("tool", "function"):
                         logger.debug(
                             "FakeLLM.call msg[%d] role=%r content=%r",
-                            idx, role, str(content)[:200],
+                            idx,
+                            role,
+                            str(content)[:200],
                         )
 
         # ── per-thread turn counter (thread-local for parallel task isolation) ──
@@ -163,7 +161,9 @@ class FakeLLM(BaseLLM):
         turn = current_turn
         logger.debug(
             "FakeLLM turn=%d messages_len=%d tool_order=%s",
-            turn, len(messages), self._tool_order,
+            turn,
+            len(messages),
+            self._tool_order,
         )
 
         if tools:
@@ -358,10 +358,7 @@ class FakeLLM(BaseLLM):
         # Using "Return ONLY the JSON object" prevents the merge crew from accidentally
         # returning PR status JSON when the get_pull_request tool result contains
         # "is_merged" / "approval_count" keys.
-        _is_pr_status_task = (
-            "Return ONLY the JSON object" in prompt
-            or "JSON with is_merged" in prompt
-        )
+        _is_pr_status_task = "Return ONLY the JSON object" in prompt or "JSON with is_merged" in prompt
         if _is_pr_status_task:
             import re as _re
 
@@ -381,7 +378,7 @@ class FakeLLM(BaseLLM):
             # the MCP response's text field (e.g. "[]", '{"merged": false}').
             # ------------------------------------------------------------------
             tool_result_texts: list[str] = []
-            for msg in (messages or []):
+            for msg in messages or []:
                 if not isinstance(msg, dict):
                     continue
                 role = msg.get("role", "")
@@ -393,9 +390,7 @@ class FakeLLM(BaseLLM):
                 elif isinstance(content, list):
                     for block in content:
                         if isinstance(block, dict):
-                            tool_result_texts.append(
-                                str(block.get("text", block.get("content", "")))
-                            )
+                            tool_result_texts.append(str(block.get("text", block.get("content", ""))))
                         else:
                             tool_result_texts.append(str(block))
 
@@ -433,9 +428,7 @@ class FakeLLM(BaseLLM):
                         is_merged = True
                     if _re.search(r'"state"\s*:', text):
                         has_reviews_result = True
-                    approval_count += len(
-                        _re.findall(r'"state"\s*:\s*"APPROVED"', text, _re.IGNORECASE)
-                    )
+                    approval_count += len(_re.findall(r'"state"\s*:\s*"APPROVED"', text, _re.IGNORECASE))
                     if text_stripped in ("[]", "[ ]"):
                         has_reviews_result = True
 
@@ -462,11 +455,13 @@ class FakeLLM(BaseLLM):
                 pr_url,
             )
 
-            return json.dumps({
-                "is_merged": is_merged,
-                "approval_count": approval_count,
-                "pr_url": pr_url,
-            })
+            return json.dumps(
+                {
+                    "is_merged": is_merged,
+                    "approval_count": approval_count,
+                    "pr_url": pr_url,
+                }
+            )
 
         for keyword, response in self._responses.items():
             if keyword in prompt:
@@ -475,8 +470,7 @@ class FakeLLM(BaseLLM):
 
         # If any tool-result message contains a PR html_url (from create_pull_request),
         # emit "PR_URL: <url>" so _extract_pr_url can register it in the watcher dicts.
-        import re as _re2
-        for msg in (messages or []):
+        for msg in messages or []:
             if not isinstance(msg, dict):
                 continue
             if msg.get("role", "") not in ("tool", "function"):
@@ -492,10 +486,7 @@ class FakeLLM(BaseLLM):
                 pr_url = str(data["html_url"])
                 if "/pull/" in pr_url:
                     logger.debug("FakeLLM: emitting PR_URL from tool result: %s", pr_url)
-                    return (
-                        f"I have completed the task successfully.\n"
-                        f"PR_URL: {pr_url}"
-                    )
+                    return f"I have completed the task successfully.\n" f"PR_URL: {pr_url}"
 
         return self._default_response
 
@@ -585,13 +576,8 @@ class FakeLLM(BaseLLM):
         base: dict[str, Any] = {}
 
         if bare in ("add_comment", "add_comment_2"):
-            permalink_match = _re.search(
-                r"https?://[a-zA-Z0-9._-]*slack\.com/[^\s\"']+", prompt
-            )
-            permalink_line = (
-                f"\n\n🔗 Slack thread: {permalink_match.group(0)}\n"
-                if permalink_match else ""
-            )
+            permalink_match = _re.search(r"https?://[a-zA-Z0-9._-]*slack\.com/[^\s\"']+", prompt)
+            permalink_line = f"\n\n🔗 Slack thread: {permalink_match.group(0)}\n" if permalink_match else ""
             # Extract the ticket/task ID from the prompt so that repeated
             # add_comment calls for *different* tickets produce distinct
             # argument dicts — and therefore distinct cache keys in CrewAI's
@@ -652,15 +638,25 @@ class FakeLLM(BaseLLM):
             # signals, since the human intent appears at the top of the task description.
             # Fall back to the prompt head if no user message found.
             scan_text = ""
-            for msg in (messages or []):
+            for msg in messages or []:
                 if isinstance(msg, dict) and msg.get("role") == "user":
                     scan_text = str(msg.get("content", ""))[:1000].lower()
                     break
             if not scan_text:
                 scan_text = prompt[:1000].lower()
-            reject_kw = ("let's drop", "drop this", "cancel this", "not pursue",
-                         "too competitive", "won't do this", "rejected", "not now",
-                         "drop it", "drop the", "drop this idea")
+            reject_kw = (
+                "let's drop",
+                "drop this",
+                "cancel this",
+                "not pursue",
+                "too competitive",
+                "won't do this",
+                "rejected",
+                "not now",
+                "drop it",
+                "drop the",
+                "drop this idea",
+            )
             status = "REJECTED" if any(k in scan_text for k in reject_kw) else "OPEN"
 
             # Use a per-thread invocation counter to generate a unique task name
@@ -686,15 +682,24 @@ class FakeLLM(BaseLLM):
         elif bare in ("reply_to_thread", "send_message"):
             # Determine if this is an acceptance send_message (needs [dev lead])
             scan_text = ""
-            for msg in (messages or []):
+            for msg in messages or []:
                 if isinstance(msg, dict) and msg.get("role") == "user":
                     scan_text = str(msg.get("content", ""))[:1000].lower()
                     break
             if not scan_text:
                 scan_text = prompt[:1000].lower()
-            accept_kw = ("let's do it", "approved", "go ahead", "proceed",
-                         "lgtm", "greenlight", "approve this", "i approve",
-                         "we're doing", "accepted")
+            accept_kw = (
+                "let's do it",
+                "approved",
+                "go ahead",
+                "proceed",
+                "lgtm",
+                "greenlight",
+                "approve this",
+                "i approve",
+                "we're doing",
+                "accepted",
+            )
             is_accepted = any(k in scan_text for k in accept_kw)
             if bare == "send_message" and is_accepted:
                 dev_lead_text = (
@@ -723,4 +728,3 @@ class FakeLLM(BaseLLM):
         if overrides:
             base = {**base, **overrides}
         return base
-

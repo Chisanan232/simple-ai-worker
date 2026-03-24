@@ -286,9 +286,9 @@ class TestPlannerIdeaSurveyTaskDescription:
             mock_say=mock_say,
             mock_registry=mock_registry_with_planner,
         )
-        assert "Idea Survey" in desc or "survey" in desc.lower(), (
-            f"Expected 'Idea Survey' or 'survey' in task description. Got:\n{desc[:500]}"
-        )
+        assert (
+            "Idea Survey" in desc or "survey" in desc.lower()
+        ), f"Expected 'Idea Survey' or 'survey' in task description. Got:\n{desc[:500]}"
 
     def test_int_pi_06_get_messages_instruction_present(
         self,
@@ -302,8 +302,7 @@ class TestPlannerIdeaSurveyTaskDescription:
             mock_registry=mock_registry_with_planner,
         )
         assert "get_messages" in desc, (
-            f"Expected 'get_messages' in task description for thread context reading. "
-            f"Got:\n{desc[:500]}"
+            f"Expected 'get_messages' in task description for thread context reading. " f"Got:\n{desc[:500]}"
         )
 
     def test_int_pi_07_all_survey_dimensions_covered(
@@ -319,16 +318,18 @@ class TestPlannerIdeaSurveyTaskDescription:
         )
         desc_lower = desc.lower()
         # Check for at least 6 of 8 key survey dimension terms
-        dimension_hits = sum([
-            "marketing" in desc_lower,
-            "market scope" in desc_lower or "market size" in desc_lower,
-            "business model" in desc_lower,
-            "target audience" in desc_lower or "audience" in desc_lower,
-            "pain" in desc_lower,
-            "mvp" in desc_lower,
-            "implementation" in desc_lower or "implement" in desc_lower,
-            "budget" in desc_lower,
-        ])
+        dimension_hits = sum(
+            [
+                "marketing" in desc_lower,
+                "market scope" in desc_lower or "market size" in desc_lower,
+                "business model" in desc_lower,
+                "target audience" in desc_lower or "audience" in desc_lower,
+                "pain" in desc_lower,
+                "mvp" in desc_lower,
+                "implementation" in desc_lower or "implement" in desc_lower,
+                "budget" in desc_lower,
+            ]
+        )
         assert dimension_hits >= 6, (
             f"Expected at least 6 survey dimensions covered in task description. "
             f"Only found {dimension_hits}. Description snippet:\n{desc[:800]}"
@@ -346,14 +347,9 @@ class TestPlannerIdeaSurveyTaskDescription:
             mock_registry=mock_registry_with_planner,
         )
         desc_lower = desc.lower()
-        has_guardrail = (
-            "do not create" in desc_lower
-            or "do NOT create" in desc
-            or "br-11" in desc_lower
-        )
+        has_guardrail = "do not create" in desc_lower or "do NOT create" in desc or "br-11" in desc_lower
         assert has_guardrail, (
-            f"Expected guardrail against ticket creation during survey mode. "
-            f"Description snippet:\n{desc[:600]}"
+            f"Expected guardrail against ticket creation during survey mode. " f"Description snippet:\n{desc[:600]}"
         )
 
     def test_int_pi_09_type_a_instructions_still_present(
@@ -403,10 +399,7 @@ class TestPlannerIdeaSurveyTaskDescription:
             mock_registry=mock_registry_with_planner,
             thread_ts="999.111",
         )
-        assert "999.111" in desc, (
-            f"Expected thread_ts '999.111' to appear in task description. "
-            f"Got:\n{desc[:400]}"
-        )
+        assert "999.111" in desc, f"Expected thread_ts '999.111' to appear in task description. " f"Got:\n{desc[:400]}"
 
     def test_int_pi_09d_idea_survey_plan_heading_present(
         self,
@@ -420,8 +413,7 @@ class TestPlannerIdeaSurveyTaskDescription:
             mock_registry=mock_registry_with_planner,
         )
         assert "Idea Survey Plan" in desc, (
-            f"Expected '📋 Idea Survey Plan' heading in task description. "
-            f"Got:\n{desc[:500]}"
+            f"Expected '📋 Idea Survey Plan' heading in task description. " f"Got:\n{desc[:500]}"
         )
 
 
@@ -443,9 +435,7 @@ class TestPlannerConclusionTaskDescription:
             mock_registry=mock_registry_with_planner,
         )
         desc_lower = desc.lower()
-        assert "conclusion" in desc_lower, (
-            f"Expected 'conclusion' in task description. Got:\n{desc[:500]}"
-        )
+        assert "conclusion" in desc_lower, f"Expected 'conclusion' in task description. Got:\n{desc[:500]}"
 
     def test_int_pi_11_accept_path_has_open_status_and_dev_lead(
         self,
@@ -459,13 +449,12 @@ class TestPlannerConclusionTaskDescription:
             mock_registry=mock_registry_with_planner,
         )
         assert '"OPEN"' in desc or "'OPEN'" in desc or "OPEN" in desc, (
-            f"Expected 'OPEN' status in task description accept path. "
-            f"Got:\n{desc[:500]}"
+            f"Expected 'OPEN' status in task description accept path. " f"Got:\n{desc[:500]}"
         )
         desc_lower = desc.lower()
-        assert "dev lead" in desc_lower or "[dev lead]" in desc_lower, (
-            f"Expected 'dev lead' mention in accept path. Got:\n{desc[:500]}"
-        )
+        assert (
+            "dev lead" in desc_lower or "[dev lead]" in desc_lower
+        ), f"Expected 'dev lead' mention in accept path. Got:\n{desc[:500]}"
 
     def test_int_pi_12_reject_path_has_rejected_status(
         self,
@@ -478,10 +467,7 @@ class TestPlannerConclusionTaskDescription:
             mock_say=mock_say,
             mock_registry=mock_registry_with_planner,
         )
-        assert "REJECTED" in desc, (
-            f"Expected 'REJECTED' status in task description reject path. "
-            f"Got:\n{desc[:500]}"
-        )
+        assert "REJECTED" in desc, f"Expected 'REJECTED' status in task description reject path. " f"Got:\n{desc[:500]}"
 
     def test_int_pi_13_reject_path_guardrail_no_dev_lead(
         self,
@@ -503,8 +489,7 @@ class TestPlannerConclusionTaskDescription:
             or ("reject" in desc_lower and "dev lead" in desc_lower and "not" in desc_lower)
         )
         assert has_reject_guard, (
-            f"Expected guardrail preventing Dev Lead mention on reject path. "
-            f"Description snippet:\n{desc[:800]}"
+            f"Expected guardrail preventing Dev Lead mention on reject path. " f"Description snippet:\n{desc[:800]}"
         )
 
     def test_int_pi_14_accept_path_uses_send_message_not_reply_to_thread(
@@ -571,8 +556,7 @@ class TestPlannerConclusionTaskDescription:
             or ("accepted" in desc_lower and "human only" in desc_lower)
         )
         assert has_br1, (
-            f"Expected BR-1 guardrail (never set ACCEPTED) in task description. "
-            f"Description snippet:\n{desc[:600]}"
+            f"Expected BR-1 guardrail (never set ACCEPTED) in task description. " f"Description snippet:\n{desc[:600]}"
         )
 
     def test_int_pi_15c_reject_path_has_reply_to_thread_step(
@@ -590,5 +574,3 @@ class TestPlannerConclusionTaskDescription:
             f"Expected 'reply_to_thread' in task description for conclusion message. "
             f"Description snippet:\n{desc[:500]}"
         )
-
-

@@ -54,7 +54,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
-from crewai import Task, Agent
+from crewai import Agent, Task
 
 from src.crew.builder import CrewBuilder
 from src.ticket.models import TicketRecord

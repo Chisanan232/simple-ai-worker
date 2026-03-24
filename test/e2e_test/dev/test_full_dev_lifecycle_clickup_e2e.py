@@ -28,12 +28,13 @@ import pytest
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 from test.e2e_test.conftest import (
+    E2E_WORKFLOW_CONFIG,
     MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
-    E2E_WORKFLOW_CONFIG,
 )
+
 from src.ticket.models import PRRecord
 from src.ticket.workflow import WorkflowConfig
 
@@ -48,6 +49,7 @@ def _make_e2e_settings(timeout: int = 300) -> Any:
 
 def _pre_populate_pr(ticket_id: str, pr_url: str, age_seconds: float = 310.0) -> None:
     import src.scheduler.jobs.scan_tickets as scan_mod
+
     scan_mod._open_prs[ticket_id] = PRRecord(
         ticket_id=ticket_id,
         pr_url=pr_url,
@@ -58,6 +60,7 @@ def _pre_populate_pr(ticket_id: str, pr_url: str, age_seconds: float = 310.0) ->
 
 def _run_dev_handler_sync(event: dict, registry: Any) -> None:
     from src.slack_app.handlers.dev import dev_handler
+
     executor = ThreadPoolExecutor(max_workers=1)
     try:
         dev_handler(
@@ -79,6 +82,7 @@ def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
     class _StubTracker:
         def fetch_tickets_for_operation(self, op: Any) -> list:
             from src.ticket.workflow import WorkflowOperation
+
             if op == WorkflowOperation.SCAN_FOR_WORK:
                 return _tickets
             return []
@@ -97,6 +101,7 @@ def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
 # E2E-20: Full path S1 → COMPLETE with auto-merge (ClickUp)
 # ===========================================================================
 
+
 @skip_without_llm
 class TestFullPathS1ToComplete:
     def test_full_path_s1_to_complete_auto_merge(
@@ -105,8 +110,8 @@ class TestFullPathS1ToComplete:
     ) -> None:
         """E2E-20 (ClickUp): Thread summary → ACCEPTED → dev → PR → approve → auto-merge → COMPLETE."""
         import src.scheduler.jobs.scan_tickets as scan_mod
-        from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
+        from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
         stub = mcp_stub
         url = stub.url
@@ -120,28 +125,40 @@ class TestFullPathS1ToComplete:
         pr_url = "https://github.com/org/repo/pull/999"
         pr_opened = [False]
 
-        stub.register_tool("get_messages", lambda args: {
-            "ok": True,
-            "messages": [
-                {"user": "U1", "text": "Discuss task cu-020 — use OAuth2.", "ts": "1.1"},
-                {"user": "U2", "text": "Agreed. Task: cu-020.", "ts": "1.2"},
-            ],
-        })
+        stub.register_tool(
+            "get_messages",
+            lambda args: {
+                "ok": True,
+                "messages": [
+                    {"user": "U1", "text": "Discuss task cu-020 — use OAuth2.", "ts": "1.1"},
+                    {"user": "U2", "text": "Agreed. Task: cu-020.", "ts": "1.2"},
+                ],
+            },
+        )
         stub.register_tool("reply_to_thread", lambda args: {"ok": True})
         stub.register_tool("send_message", lambda args: {"ok": True})
-        stub.register_tool("search_tasks", lambda args: [
-            {"id": "cu-020", "name": "OAuth2 login", "status": {"status": "ACCEPTED"},
-             "url": "https://app.clickup.com/t/cu-020"},
-        ])
+        stub.register_tool(
+            "search_tasks",
+            lambda args: [
+                {
+                    "id": "cu-020",
+                    "name": "OAuth2 login",
+                    "status": {"status": "ACCEPTED"},
+                    "url": "https://app.clickup.com/t/cu-020",
+                },
+            ],
+        )
         stub.register_tool("search_issues", lambda args: [])
-        stub.register_tool("get_task", lambda args: {
-            "id": "cu-020", "name": "OAuth2 login",
-            "status": {"status": "ACCEPTED"},
-            "description": "Implement OAuth2 with Google SSO.",
-        })
-        stub.register_tool("add_comment", lambda args: (
-            add_comment_calls.append(args) or {"id": "c1"}
-        ))
+        stub.register_tool(
+            "get_task",
+            lambda args: {
+                "id": "cu-020",
+                "name": "OAuth2 login",
+                "status": {"status": "ACCEPTED"},
+                "description": "Implement OAuth2 with Google SSO.",
+            },
+        )
+        stub.register_tool("add_comment", lambda args: (add_comment_calls.append(args) or {"id": "c1"}))
 
         def _update_task(args: dict) -> dict:
             status = str(args.get("status", args.get("fields", {}))).upper()
@@ -157,18 +174,29 @@ class TestFullPathS1ToComplete:
             return {"html_url": pr_url, "number": 999}
 
         stub.register_tool("create_pull_request", _create_pr)
-        stub.register_tool("get_pull_request", lambda args: {
-            "merged": False, "is_merged": False, "approval_count": 1,
-        })
-        stub.register_tool("get_pull_request_reviews", lambda args: [
-            {"state": "APPROVED"},
-        ])
-        stub.register_tool("merge_pull_request", lambda args: (
-            merge_calls.append(args) or {"merged": True, "sha": "abc"}
-        ))
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "merged": False,
+                "is_merged": False,
+                "approval_count": 1,
+            },
+        )
+        stub.register_tool(
+            "get_pull_request_reviews",
+            lambda args: [
+                {"state": "APPROVED"},
+            ],
+        )
+        stub.register_tool(
+            "merge_pull_request", lambda args: (merge_calls.append(args) or {"merged": True, "sha": "abc"})
+        )
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -187,15 +215,23 @@ class TestFullPathS1ToComplete:
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             from src.ticket.models import TicketRecord
+
             scan_and_dispatch_job(
                 registry=registry,
                 settings=_make_e2e_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(accepted_tickets=[
-                    TicketRecord(id="cu-020", source="clickup", title="OAuth2 login",
-                                 url="https://app.clickup.com/t/cu-020", raw_status="ACCEPTED"),
-                ]),
+                tracker_registry=_make_stub_tracker_registry(
+                    accepted_tickets=[
+                        TicketRecord(
+                            id="cu-020",
+                            source="clickup",
+                            title="OAuth2 login",
+                            url="https://app.clickup.com/t/cu-020",
+                            raw_status="ACCEPTED",
+                        ),
+                    ]
+                ),
             )
             executor.shutdown(wait=True)
         finally:
@@ -213,17 +249,18 @@ class TestFullPathS1ToComplete:
             workflow=workflow,
         )
 
-        assert len(accepted_write_calls) == 0, (
-            f"BR-1 VIOLATED: ACCEPTED was written by AI. Calls: {accepted_write_calls}"
-        )
-        assert pr_opened[0] or len(scan_mod._open_prs) > 0 or len(merge_calls) > 0, (
-            "Expected full dev lifecycle to complete (PR opened or merge attempted)"
-        )
+        assert (
+            len(accepted_write_calls) == 0
+        ), f"BR-1 VIOLATED: ACCEPTED was written by AI. Calls: {accepted_write_calls}"
+        assert (
+            pr_opened[0] or len(scan_mod._open_prs) > 0 or len(merge_calls) > 0
+        ), "Expected full dev lifecycle to complete (PR opened or merge attempted)"
 
 
 # ===========================================================================
 # E2E-21: Full path — user merges before timeout (ClickUp)
 # ===========================================================================
+
 
 @skip_without_llm
 class TestFullPathUserMergeBeforeTimeout:
@@ -234,8 +271,8 @@ class TestFullPathUserMergeBeforeTimeout:
     ) -> None:
         """E2E-21 (ClickUp): Dev opens PR → user merges before timeout → COMPLETE transition."""
         import src.scheduler.jobs.scan_tickets as scan_mod
-        from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
+        from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
         stub = mcp_stub
         url = stub.url
@@ -245,49 +282,76 @@ class TestFullPathUserMergeBeforeTimeout:
         transition_calls: list = []
         merge_calls: list = []
 
-        stub.register_tool("search_tasks", lambda args: [
-            {"id": "cu-021", "name": "Auth feature", "status": {"status": "ACCEPTED"},
-             "url": "https://app.clickup.com/t/cu-021"},
-        ])
+        stub.register_tool(
+            "search_tasks",
+            lambda args: [
+                {
+                    "id": "cu-021",
+                    "name": "Auth feature",
+                    "status": {"status": "ACCEPTED"},
+                    "url": "https://app.clickup.com/t/cu-021",
+                },
+            ],
+        )
         stub.register_tool("search_issues", lambda args: [])
-        stub.register_tool("get_task", lambda args: {
-            "id": "cu-021", "name": "Auth feature",
-            "status": {"status": "ACCEPTED"},
-            "description": "OAuth2 login.",
-        })
-        stub.register_tool("update_task", lambda args: (
-            transition_calls.append(args) or {"ok": True}
-        ))
-        stub.register_tool("create_pull_request", lambda args: {
-            "html_url": pr_url, "number": 998,
-        })
+        stub.register_tool(
+            "get_task",
+            lambda args: {
+                "id": "cu-021",
+                "name": "Auth feature",
+                "status": {"status": "ACCEPTED"},
+                "description": "OAuth2 login.",
+            },
+        )
+        stub.register_tool("update_task", lambda args: (transition_calls.append(args) or {"ok": True}))
+        stub.register_tool(
+            "create_pull_request",
+            lambda args: {
+                "html_url": pr_url,
+                "number": 998,
+            },
+        )
         stub.register_tool("add_comment", lambda args: {"id": "c1"})
         stub.register_tool("send_message", lambda args: {"ok": True})
         # PR already merged by user (fresh, within timeout)
-        stub.register_tool("get_pull_request", lambda args: {
-            "merged": True, "is_merged": True, "approval_count": 1,
-        })
-        stub.register_tool("merge_pull_request", lambda args: (
-            merge_calls.append(args) or {"merged": True}
-        ))
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "merged": True,
+                "is_merged": True,
+                "approval_count": 1,
+            },
+        )
+        stub.register_tool("merge_pull_request", lambda args: (merge_calls.append(args) or {"merged": True}))
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             from src.ticket.models import TicketRecord
+
             scan_and_dispatch_job(
                 registry=registry,
                 settings=_make_e2e_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(accepted_tickets=[
-                    TicketRecord(id="cu-021", source="clickup", title="Auth feature",
-                                 url="https://app.clickup.com/t/cu-021", raw_status="ACCEPTED"),
-                ]),
+                tracker_registry=_make_stub_tracker_registry(
+                    accepted_tickets=[
+                        TicketRecord(
+                            id="cu-021",
+                            source="clickup",
+                            title="Auth feature",
+                            url="https://app.clickup.com/t/cu-021",
+                            raw_status="ACCEPTED",
+                        ),
+                    ]
+                ),
             )
             executor.shutdown(wait=True)
         finally:
@@ -306,18 +370,16 @@ class TestFullPathUserMergeBeforeTimeout:
         # No duplicate merge (user already merged)
         assert len(merge_calls) == 0, "Already-merged PR must not be re-merged"
         # Ticket should be transitioned to COMPLETE
-        complete_calls = [
-            t for t in transition_calls
-            if "COMPLETE" in str(t).upper()
-        ]
-        assert len(complete_calls) > 0 or "cu-021" not in scan_mod._open_prs, (
-            "Expected ticket transitioned to COMPLETE after user merge"
-        )
+        complete_calls = [t for t in transition_calls if "COMPLETE" in str(t).upper()]
+        assert (
+            len(complete_calls) > 0 or "cu-021" not in scan_mod._open_prs
+        ), "Expected ticket transitioned to COMPLETE after user merge"
 
 
 # ===========================================================================
 # E2E-22: Full path with review comment fix cycle (ClickUp)
 # ===========================================================================
+
 
 @skip_without_llm
 class TestFullPathWithReviewCommentFix:
@@ -326,8 +388,9 @@ class TestFullPathWithReviewCommentFix:
         mcp_stub: MCPStubServer,
     ) -> None:
         """E2E-22 (ClickUp): Dev opens PR → reviewer requests changes → fix → re-review → merge."""
-        from src.scheduler.jobs.pr_review_comment_handler import pr_review_comment_handler_job
-        from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
+        from src.scheduler.jobs.pr_review_comment_handler import (
+            pr_review_comment_handler_job,
+        )
 
         stub = mcp_stub
         url = stub.url
@@ -341,18 +404,22 @@ class TestFullPathWithReviewCommentFix:
         _pre_populate_pr("cu-022", pr_url, age_seconds=310)
 
         import src.scheduler.jobs.scan_tickets as scan_mod
+
         scan_mod._prs_under_review["cu-022"] = pr_url
 
-        stub.register_tool("get_pull_request_reviews", lambda args: [
-            {"state": "CHANGES_REQUESTED", "user": {"login": "reviewer1"}},
-        ])
-        stub.register_tool("get_pull_request_comments", lambda args: [
-            {"id": "c1", "body": "Add error handling", "path": "main.py",
-             "line": 10, "resolved": False},
-        ])
-        stub.register_tool("reply_to_review_comment", lambda args: (
-            reply_calls.append(args) or {"ok": True}
-        ))
+        stub.register_tool(
+            "get_pull_request_reviews",
+            lambda args: [
+                {"state": "CHANGES_REQUESTED", "user": {"login": "reviewer1"}},
+            ],
+        )
+        stub.register_tool(
+            "get_pull_request_comments",
+            lambda args: [
+                {"id": "c1", "body": "Add error handling", "path": "main.py", "line": 10, "resolved": False},
+            ],
+        )
+        stub.register_tool("reply_to_review_comment", lambda args: (reply_calls.append(args) or {"ok": True}))
 
         def _submit_review(args: dict) -> dict:
             if "APPROVE" in str(args).upper():
@@ -361,17 +428,25 @@ class TestFullPathWithReviewCommentFix:
 
         stub.register_tool("approve_pull_request", _submit_review)
         stub.register_tool("submit_review", _submit_review)
-        stub.register_tool("get_pull_request", lambda args: {
-            "merged": False, "is_merged": False, "approval_count": 1,
-        })
-        stub.register_tool("merge_pull_request", lambda args: (
-            merge_calls.append(args) or {"merged": True, "sha": "abc"}
-        ))
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "merged": False,
+                "is_merged": False,
+                "approval_count": 1,
+            },
+        )
+        stub.register_tool(
+            "merge_pull_request", lambda args: (merge_calls.append(args) or {"merged": True, "sha": "abc"})
+        )
         stub.register_tool("update_task", lambda args: {"ok": True})
         stub.register_tool("send_message", lambda args: {"ok": True})
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -383,14 +458,13 @@ class TestFullPathWithReviewCommentFix:
         )
 
         # Dev must NOT self-approve (no self-approve rule)
-        assert len(approve_calls) == 0, (
-            f"Dev Agent must NOT self-approve PRs. Got: {approve_calls}"
-        )
+        assert len(approve_calls) == 0, f"Dev Agent must NOT self-approve PRs. Got: {approve_calls}"
 
 
 # ===========================================================================
 # E2E-23: Ask and wait when no ticket ID in thread (BR-6)
 # ===========================================================================
+
 
 @skip_without_llm
 class TestAskAndWaitWhenNoTicketId:
@@ -406,22 +480,24 @@ class TestAskAndWaitWhenNoTicketId:
         add_comment_calls: list = []
         reply_calls: list = []
 
-        stub.register_tool("get_messages", lambda args: {
-            "ok": True,
-            "messages": [
-                {"user": "U1", "text": "We decided to use Redis.", "ts": "1.1"},
-                {"user": "U2", "text": "Great, Redis Cluster.", "ts": "1.2"},
-            ],
-        })
-        stub.register_tool("add_comment", lambda args: (
-            add_comment_calls.append(args) or {"id": "c1"}
-        ))
-        stub.register_tool("reply_to_thread", lambda args: (
-            reply_calls.append(args) or {"ok": True}
-        ))
+        stub.register_tool(
+            "get_messages",
+            lambda args: {
+                "ok": True,
+                "messages": [
+                    {"user": "U1", "text": "We decided to use Redis.", "ts": "1.1"},
+                    {"user": "U2", "text": "Great, Redis Cluster.", "ts": "1.2"},
+                ],
+            },
+        )
+        stub.register_tool("add_comment", lambda args: (add_comment_calls.append(args) or {"id": "c1"}))
+        stub.register_tool("reply_to_thread", lambda args: (reply_calls.append(args) or {"ok": True}))
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
 
@@ -436,17 +512,15 @@ class TestAskAndWaitWhenNoTicketId:
         )
 
         assert len(add_comment_calls) == 0, (
-            f"add_comment must not be called when no ticket ID found (BR-6). "
-            f"Calls: {add_comment_calls}"
+            f"add_comment must not be called when no ticket ID found (BR-6). " f"Calls: {add_comment_calls}"
         )
-        assert len(reply_calls) > 0, (
-            "Expected LLM to ask for ticket ID via slack/reply_to_thread (BR-6)"
-        )
+        assert len(reply_calls) > 0, "Expected LLM to ask for ticket ID via slack/reply_to_thread (BR-6)"
 
 
 # ===========================================================================
 # E2E-24: REJECTED ticket halts all processing (BR-3)
 # ===========================================================================
+
 
 @skip_without_llm
 class TestRejectionHaltsProcessing:
@@ -465,43 +539,53 @@ class TestRejectionHaltsProcessing:
         transition_calls: list = []
         pr_calls: list = []
 
-        stub.register_tool("search_tasks", lambda args: [
-            {"id": "cu-023", "name": "Cancelled work",
-             "status": {"status": "REJECTED"},
-             "url": "https://app.clickup.com/t/cu-023"},
-        ])
+        stub.register_tool(
+            "search_tasks",
+            lambda args: [
+                {
+                    "id": "cu-023",
+                    "name": "Cancelled work",
+                    "status": {"status": "REJECTED"},
+                    "url": "https://app.clickup.com/t/cu-023",
+                },
+            ],
+        )
         stub.register_tool("search_issues", lambda args: [])
-        stub.register_tool("update_task", lambda args: (
-            transition_calls.append(args) or {"ok": True}
-        ))
-        stub.register_tool("create_pull_request", lambda args: (
-            pr_calls.append(args) or {"html_url": "", "number": 0}
-        ))
+        stub.register_tool("update_task", lambda args: (transition_calls.append(args) or {"ok": True}))
+        stub.register_tool("create_pull_request", lambda args: (pr_calls.append(args) or {"html_url": "", "number": 0}))
 
         dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url,
+            jira_url=url,
+            slack_url=url,
+            github_url=url,
+            clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             from src.ticket.models import TicketRecord
+
             scan_and_dispatch_job(
                 registry=registry,
                 settings=_make_e2e_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(accepted_tickets=[
-                    TicketRecord(id="cu-023", source="clickup", title="Cancelled work",
-                                 url="https://app.clickup.com/t/cu-023", raw_status="REJECTED"),
-                ]),
+                tracker_registry=_make_stub_tracker_registry(
+                    accepted_tickets=[
+                        TicketRecord(
+                            id="cu-023",
+                            source="clickup",
+                            title="Cancelled work",
+                            url="https://app.clickup.com/t/cu-023",
+                            raw_status="REJECTED",
+                        ),
+                    ]
+                ),
             )
             executor.shutdown(wait=True)
         finally:
             executor.shutdown(wait=False)
 
-        assert len(pr_calls) == 0, (
-            f"No PR must be created for REJECTED ticket. Got: {pr_calls}"
-        )
+        assert len(pr_calls) == 0, f"No PR must be created for REJECTED ticket. Got: {pr_calls}"
         assert "cu-023" not in scan_mod._open_prs
         assert "cu-023" not in scan_mod._prs_under_review
-

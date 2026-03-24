@@ -1,9 +1,6 @@
 """Dev Lead Agent E2E test fixtures — Layer 3."""
+
 from __future__ import annotations
-
-from typing import Any, Generator, Optional
-
-import pytest
 
 from test.e2e_test.conftest import (
     E2ESettings,
@@ -11,6 +8,9 @@ from test.e2e_test.conftest import (
     build_dev_lead_agent_against_stubs,
     build_e2e_registry,
 )
+from typing import Any, Generator, Optional
+
+import pytest
 
 
 @pytest.fixture
@@ -49,9 +49,7 @@ def breakdown_tool_order(fake_llm_session: Optional[FakeLLM]) -> Generator[None,
     and the agent replies in Slack (E2E-DL-03, DL-06).
     """
     if fake_llm_session is not None:
-        fake_llm_session.set_tool_order(
-            "get_task", "create_task", "create_task", "add_comment", "reply_to_thread"
-        )
+        fake_llm_session.set_tool_order("get_task", "create_task", "create_task", "add_comment", "reply_to_thread")
     yield
 
 
@@ -77,5 +75,3 @@ def reply_only_tool_order(fake_llm_session: Optional[FakeLLM]) -> Generator[None
     if fake_llm_session is not None:
         fake_llm_session.set_tool_order("reply_to_thread")
     yield
-
-

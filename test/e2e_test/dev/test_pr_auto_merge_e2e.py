@@ -23,12 +23,13 @@ import pytest
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 from test.e2e_test.conftest import (
+    E2E_WORKFLOW_CONFIG,
     MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
-    E2E_WORKFLOW_CONFIG,
 )
+
 from src.ticket.models import PRRecord
 from src.ticket.workflow import WorkflowConfig
 
@@ -60,6 +61,7 @@ def _pre_populate_pr(
 # E2E-11: Auto-merge with approval after timeout
 # ===========================================================================
 
+
 @skip_without_llm
 class TestAutoMergeWithApproval:
     def test_auto_merge_with_approval_after_timeout(
@@ -82,15 +84,21 @@ class TestAutoMergeWithApproval:
         transition_calls: list = []
         complete_write_calls: list = []
 
-        stub.register_tool("get_pull_request", lambda args: {
-            "html_url": pr_url,
-            "merged": False,
-            "is_merged": False,
-            "approval_count": 1,
-        })
-        stub.register_tool("get_pull_request_reviews", lambda args: [
-            {"state": "APPROVED", "user": {"login": "reviewer1"}},
-        ])
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "html_url": pr_url,
+                "merged": False,
+                "is_merged": False,
+                "approval_count": 1,
+            },
+        )
+        stub.register_tool(
+            "get_pull_request_reviews",
+            lambda args: [
+                {"state": "APPROVED", "user": {"login": "reviewer1"}},
+            ],
+        )
 
         def _merge(args: dict) -> dict:
             merge_calls.append(args)
@@ -108,9 +116,7 @@ class TestAutoMergeWithApproval:
         stub.register_tool("update_task", _transition)
         stub.register_tool("send_message", lambda args: {"ok": True, "ts": "1.1"})
 
-        dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url
-        )
+        dev_agent = build_dev_agent_against_stubs(jira_url=url, slack_url=url, github_url=url, clickup_url=url)
         registry = build_e2e_registry(dev_agent)
 
         pr_merge_watcher_job(
@@ -127,6 +133,7 @@ class TestAutoMergeWithApproval:
 # ===========================================================================
 # E2E-12: No merge without approval (BR-2)
 # ===========================================================================
+
 
 @skip_without_llm
 class TestNoMergeWithoutApproval:
@@ -148,20 +155,19 @@ class TestNoMergeWithoutApproval:
 
         merge_calls: list = []
 
-        stub.register_tool("get_pull_request", lambda args: {
-            "html_url": pr_url,
-            "merged": False,
-            "is_merged": False,
-            "approval_count": 0,
-        })
-        stub.register_tool("get_pull_request_reviews", lambda args: [])
-        stub.register_tool("merge_pull_request", lambda args: (
-            merge_calls.append(args) or {"merged": True}
-        ))
-
-        dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "html_url": pr_url,
+                "merged": False,
+                "is_merged": False,
+                "approval_count": 0,
+            },
         )
+        stub.register_tool("get_pull_request_reviews", lambda args: [])
+        stub.register_tool("merge_pull_request", lambda args: (merge_calls.append(args) or {"merged": True}))
+
+        dev_agent = build_dev_agent_against_stubs(jira_url=url, slack_url=url, github_url=url, clickup_url=url)
         registry = build_e2e_registry(dev_agent)
 
         pr_merge_watcher_job(
@@ -171,9 +177,7 @@ class TestNoMergeWithoutApproval:
             workflow=workflow,
         )
 
-        assert len(merge_calls) == 0, (
-            f"BR-2 VIOLATED: merge_pull_request called with 0 approvals. Calls: {merge_calls}"
-        )
+        assert len(merge_calls) == 0, f"BR-2 VIOLATED: merge_pull_request called with 0 approvals. Calls: {merge_calls}"
         # Entry must remain (not cleared — still waiting for approval).
         assert "PROJ-21" in scan_mod._open_prs
 
@@ -181,6 +185,7 @@ class TestNoMergeWithoutApproval:
 # ===========================================================================
 # E2E-13: No merge before timeout
 # ===========================================================================
+
 
 @skip_without_llm
 class TestNoMergeBeforeTimeout:
@@ -190,7 +195,6 @@ class TestNoMergeBeforeTimeout:
         pr_timeout_tool_order: None,
     ) -> None:
         """E2E-13: 1 approval but PR only 120s old → no merge yet."""
-        import src.scheduler.jobs.scan_tickets as scan_mod
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
 
         stub = mcp_stub
@@ -203,21 +207,23 @@ class TestNoMergeBeforeTimeout:
 
         merge_calls: list = []
 
-        stub.register_tool("get_pull_request", lambda args: {
-            "merged": False,
-            "is_merged": False,
-            "approval_count": 1,
-        })
-        stub.register_tool("get_pull_request_reviews", lambda args: [
-            {"state": "APPROVED"},
-        ])
-        stub.register_tool("merge_pull_request", lambda args: (
-            merge_calls.append(args) or {"merged": True}
-        ))
-
-        dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "merged": False,
+                "is_merged": False,
+                "approval_count": 1,
+            },
         )
+        stub.register_tool(
+            "get_pull_request_reviews",
+            lambda args: [
+                {"state": "APPROVED"},
+            ],
+        )
+        stub.register_tool("merge_pull_request", lambda args: (merge_calls.append(args) or {"merged": True}))
+
+        dev_agent = build_dev_agent_against_stubs(jira_url=url, slack_url=url, github_url=url, clickup_url=url)
         registry = build_e2e_registry(dev_agent)
 
         pr_merge_watcher_job(
@@ -227,14 +233,15 @@ class TestNoMergeBeforeTimeout:
             workflow=workflow,
         )
 
-        assert len(merge_calls) == 0, (
-            f"Expected no merge before 5-min timeout. merge_pull_request called: {merge_calls}"
-        )
+        assert (
+            len(merge_calls) == 0
+        ), f"Expected no merge before 5-min timeout. merge_pull_request called: {merge_calls}"
 
 
 # ===========================================================================
 # E2E-14: User merged before timeout → ticket transitioned, entry cleared
 # ===========================================================================
+
 
 @skip_without_llm
 class TestUserMergedBeforeTimeout:
@@ -258,14 +265,15 @@ class TestUserMergedBeforeTimeout:
         transition_calls: list = []
 
         # PR is already merged — watcher should detect this and transition ticket.
-        stub.register_tool("get_pull_request", lambda args: {
-            "merged": True,
-            "is_merged": True,
-            "approval_count": 1,
-        })
-        stub.register_tool("merge_pull_request", lambda args: (
-            merge_calls.append(args) or {"merged": True}
-        ))
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "merged": True,
+                "is_merged": True,
+                "approval_count": 1,
+            },
+        )
+        stub.register_tool("merge_pull_request", lambda args: (merge_calls.append(args) or {"merged": True}))
 
         def _transition(args: dict) -> dict:
             transition_calls.append(args)
@@ -275,9 +283,7 @@ class TestUserMergedBeforeTimeout:
         stub.register_tool("update_task", _transition)
         stub.register_tool("send_message", lambda args: {"ok": True})
 
-        dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url
-        )
+        dev_agent = build_dev_agent_against_stubs(jira_url=url, slack_url=url, github_url=url, clickup_url=url)
         registry = build_e2e_registry(dev_agent)
 
         pr_merge_watcher_job(
@@ -288,13 +294,11 @@ class TestUserMergedBeforeTimeout:
         )
 
         # No duplicate merge.
-        assert len(merge_calls) == 0, (
-            "Already-merged PR must not be merged again"
-        )
+        assert len(merge_calls) == 0, "Already-merged PR must not be merged again"
         # Ticket should be transitioned to COMPLETE.
-        assert len(transition_calls) > 0, (
-            "Expected ticket to be transitioned to COMPLETE after detecting already-merged PR"
-        )
+        assert (
+            len(transition_calls) > 0
+        ), "Expected ticket to be transitioned to COMPLETE after detecting already-merged PR"
         # Entry cleared.
         assert "PROJ-23" not in scan_mod._open_prs
 
@@ -302,6 +306,7 @@ class TestUserMergedBeforeTimeout:
 # ===========================================================================
 # E2E-15: After merge, _prs_under_review entry removed
 # ===========================================================================
+
 
 @skip_without_llm
 class TestMergeClearsReviewWatch:
@@ -321,23 +326,27 @@ class TestMergeClearsReviewWatch:
 
         _pre_populate_pr("PROJ-24", pr_url, age_seconds=310)
 
-        stub.register_tool("get_pull_request", lambda args: {
-            "merged": False,
-            "is_merged": False,
-            "approval_count": 2,
-        })
-        stub.register_tool("get_pull_request_reviews", lambda args: [
-            {"state": "APPROVED"},
-            {"state": "APPROVED"},
-        ])
+        stub.register_tool(
+            "get_pull_request",
+            lambda args: {
+                "merged": False,
+                "is_merged": False,
+                "approval_count": 2,
+            },
+        )
+        stub.register_tool(
+            "get_pull_request_reviews",
+            lambda args: [
+                {"state": "APPROVED"},
+                {"state": "APPROVED"},
+            ],
+        )
         stub.register_tool("merge_pull_request", lambda args: {"merged": True, "sha": "def456"})
         stub.register_tool("transition_issue", lambda args: {"ok": True})
         stub.register_tool("update_task", lambda args: {"ok": True})
         stub.register_tool("send_message", lambda args: {"ok": True})
 
-        dev_agent = build_dev_agent_against_stubs(
-            jira_url=url, slack_url=url, github_url=url, clickup_url=url
-        )
+        dev_agent = build_dev_agent_against_stubs(jira_url=url, slack_url=url, github_url=url, clickup_url=url)
         registry = build_e2e_registry(dev_agent)
 
         pr_merge_watcher_job(
@@ -347,7 +356,4 @@ class TestMergeClearsReviewWatch:
             workflow=workflow,
         )
 
-        assert "PROJ-24" not in scan_mod._prs_under_review, (
-            "_prs_under_review entry must be cleared after auto-merge"
-        )
-
+        assert "PROJ-24" not in scan_mod._prs_under_review, "_prs_under_review entry must be cleared after auto-merge"

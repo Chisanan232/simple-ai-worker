@@ -22,8 +22,8 @@ ranging from fully-offline (no credentials) to fully-live (real services).
 | **3** | **Testcontainers + Real LLM** | Real OpenAI / Anthropic | Docker Compose (auto-managed) | LLM key + all service credentials |
 | **4** | **Manual Live + Real LLM** | Real OpenAI / Anthropic | Pre-started Docker Compose | All credentials |
 
-The `mcp_urls` fixture selects the MCP tier automatically.  
-The `_maybe_patch_llm_factory` autouse fixture handles the LLM tier.  
+The `mcp_urls` fixture selects the MCP tier automatically.
+The `_maybe_patch_llm_factory` autouse fixture handles the LLM tier.
 Both are controlled by flags in `test/e2e_test/.env.e2e`.
 
 ### Mode Selection Logic
@@ -374,4 +374,3 @@ All `*_jira_e2e.py` files are currently skipped. To activate them:
 > or fully offline with no credentials (Mode 1).
 > Skipped (JIRA) tests are collected by pytest and visible in `--collect-only`,
 > ensuring they are discoverable even before JIRA credentials are configured.
-

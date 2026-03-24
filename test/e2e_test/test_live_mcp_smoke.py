@@ -29,11 +29,11 @@ Mode 4 (manual) — pre-start the stack then run:
 from __future__ import annotations
 
 import json
+from test.e2e_test.common.e2e_settings import get_e2e_settings
+from test.e2e_test.conftest import skip_without_live_services
+
 import pytest
 import requests
-
-from test.e2e_test.conftest import skip_without_live_services
-from test.e2e_test.common.e2e_settings import get_e2e_settings
 
 pytestmark = [pytest.mark.e2e]
 
@@ -67,15 +67,13 @@ def _probe_sse_server(url: str) -> None:
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         assert "text/event-stream" in content_type, (
-            f"SSE server at {url} returned unexpected Content-Type: {content_type!r}. "
-            "Expected 'text/event-stream'."
+            f"SSE server at {url} returned unexpected Content-Type: {content_type!r}. " "Expected 'text/event-stream'."
         )
         # Read up to 512 bytes — enough to contain the first SSE event.
         first_chunk = next(resp.iter_content(chunk_size=512), b"")
         text = first_chunk.decode("utf-8", errors="replace")
         assert "event: endpoint" in text or "data:" in text, (
-            f"SSE server at {url} did not send an 'event: endpoint' message. "
-            f"Got first chunk: {text!r}"
+            f"SSE server at {url} did not send an 'event: endpoint' message. " f"Got first chunk: {text!r}"
         )
 
 
@@ -90,31 +88,34 @@ def _probe_http_server(url: str, service: str = "") -> dict:
         "method": "tools/list",
         "params": {},
     }
-    
+
     # Try different URLs for ClickUp if the main one fails
     test_urls = [url]
     if "clickup" in url and url.endswith("/mcp"):
         # For ClickUp, try alternative endpoints
         base_url = url[:-4]  # Remove /mcp
-        test_urls.extend([
-            base_url + "/",
-            base_url + "/sse",
-            base_url + "/messages",
-        ])
-    
+        test_urls.extend(
+            [
+                base_url + "/",
+                base_url + "/sse",
+                base_url + "/messages",
+            ]
+        )
+
     last_error = None
     for test_url in test_urls:
         try:
             headers = {"Accept": "application/json, text/event-stream"}
-            
+
             # Add Authorization header for GitHub MCP server
             if service == "github":
                 from test.e2e_test.common.e2e_settings import E2ESettings
+
                 settings = E2ESettings()
                 github_token = settings.MCP_GITHUB_TOKEN
                 if github_token:
                     headers["Authorization"] = f"Bearer {github_token.get_secret_value()}"
-            
+
             response = requests.post(
                 test_url,
                 json=payload,
@@ -122,12 +123,12 @@ def _probe_http_server(url: str, service: str = "") -> dict:
                 timeout=10,
             )
             response.raise_for_status()
-            
+
             # Handle SSE response format (GitHub MCP server returns SSE)
             if "text/event-stream" in response.headers.get("Content-Type", ""):
-                lines = response.text.split('\n')
+                lines = response.text.split("\n")
                 for line in lines:
-                    if line.startswith('data: ') and line.strip() != 'data:':
+                    if line.startswith("data: ") and line.strip() != "data:":
                         json_data = line[6:]  # Remove 'data: ' prefix
                         if json_data.strip():
                             return json.loads(json_data)
@@ -140,7 +141,7 @@ def _probe_http_server(url: str, service: str = "") -> dict:
         except Exception as e:
             last_error = e
             continue
-    
+
     raise last_error
 
 
@@ -188,6 +189,7 @@ def _resolve_url(service: str, live_mcp_stack: dict[str, str]) -> str:
 # E2E-LIVE-01: JIRA MCP server is reachable
 # ===========================================================================
 
+
 @skip_without_live_services
 class TestJIRAMCPServer:
     def test_e2e_live_01_jira_mcp_reachable(self, live_mcp_stack: dict[str, str]) -> None:
@@ -197,9 +199,7 @@ class TestJIRAMCPServer:
         # JIRA uses legacy SSE transport — GET /sse must return text/event-stream.
         _probe_sse_server(url)
 
-    def test_e2e_live_02_jira_mcp_search_issues_tool_present(
-        self, live_mcp_stack: dict[str, str]
-    ) -> None:
+    def test_e2e_live_02_jira_mcp_search_issues_tool_present(self, live_mcp_stack: dict[str, str]) -> None:
         """E2E-LIVE-02: JIRA MCP SSE endpoint is reachable (tool listing requires full session)."""
         url = _resolve_url("jira", live_mcp_stack)
 
@@ -213,20 +213,17 @@ class TestJIRAMCPServer:
 # E2E-LIVE-03: ClickUp MCP server is reachable
 # ===========================================================================
 
+
 @skip_without_live_services
 class TestClickUpMCPServer:
-    def test_e2e_live_03_clickup_mcp_reachable(
-        self, live_mcp_stack: dict[str, str]
-    ) -> None:
+    def test_e2e_live_03_clickup_mcp_reachable(self, live_mcp_stack: dict[str, str]) -> None:
         """E2E-LIVE-03: ClickUp MCP server (SSE transport) is reachable and streams events."""
         url = _resolve_url("clickup", live_mcp_stack)
 
         # ClickUp uses legacy SSE transport — GET /sse must return text/event-stream.
         _probe_sse_server(url)
 
-    def test_e2e_live_04_clickup_mcp_search_tasks_tool_present(
-        self, live_mcp_stack: dict[str, str]
-    ) -> None:
+    def test_e2e_live_04_clickup_mcp_search_tasks_tool_present(self, live_mcp_stack: dict[str, str]) -> None:
         """E2E-LIVE-04: ClickUp MCP SSE endpoint is reachable (tool listing requires full session)."""
         url = _resolve_url("clickup", live_mcp_stack)
 
@@ -238,39 +235,32 @@ class TestClickUpMCPServer:
 # E2E-LIVE-05: GitHub MCP server is reachable
 # ===========================================================================
 
+
 @skip_without_live_services
 class TestGitHubMCPServer:
-    def test_e2e_live_05_github_mcp_reachable(
-        self, live_mcp_stack: dict[str, str]
-    ) -> None:
+    def test_e2e_live_05_github_mcp_reachable(self, live_mcp_stack: dict[str, str]) -> None:
         """E2E-LIVE-05: GitHub MCP server (Streamable HTTP) responds to tools/list."""
         url = _resolve_url("github", live_mcp_stack)
 
         # GitHub uses Streamable HTTP — POST JSON-RPC tools/list is supported.
         result = _probe_http_server(url, service="github")
 
-        assert "result" in result or "tools" in result, (
-            f"Expected MCP tools/list response. Got: {result}"
-        )
+        assert "result" in result or "tools" in result, f"Expected MCP tools/list response. Got: {result}"
         tools = result.get("result", {}).get("tools", result.get("tools", []))
         tool_names = [t.get("name", "") for t in tools]
         assert any(
-            "pull_request" in name.lower() or "github" in name.lower() or "pr" in name.lower()
-            for name in tool_names
-        ), (
-            f"Expected at least one GitHub tool. Got: {tool_names}"
-        )
+            "pull_request" in name.lower() or "github" in name.lower() or "pr" in name.lower() for name in tool_names
+        ), f"Expected at least one GitHub tool. Got: {tool_names}"
 
 
 # ===========================================================================
 # E2E-LIVE-06: Slack MCP server is reachable
 # ===========================================================================
 
+
 @skip_without_live_services
 class TestSlackMCPServer:
-    def test_e2e_live_06_slack_mcp_reachable(
-        self, live_mcp_stack: dict[str, str]
-    ) -> None:
+    def test_e2e_live_06_slack_mcp_reachable(self, live_mcp_stack: dict[str, str]) -> None:
         """E2E-LIVE-06: Slack MCP server (SSE transport) is reachable and streams events."""
         url = _resolve_url("slack", live_mcp_stack)
 
