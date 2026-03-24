@@ -22,15 +22,23 @@ pytestmark = [
     pytest.mark.slow,
 ]
 
+from test.e2e_test.common.assertions import (
+    assert_no_calls_in_stub_mode,
+    assert_stub_calls_count,
+    assert_stub_was_called,
+)
+from test.e2e_test.common.hybrid_mode import (
+    get_service_url,
+    should_assert_stub_calls,
+    should_register_stub_tools,
+)
+from test.e2e_test.common.test_infrastructure import build_planner_registry
 from test.e2e_test.conftest import (
     E2ESettings,
     MCPStubServer,
     build_planner_agent_against_stubs,
     skip_without_llm,
 )
-from test.e2e_test.common.hybrid_mode import get_service_url, should_register_stub_tools, should_assert_stub_calls
-from test.e2e_test.common.test_infrastructure import build_planner_registry
-from test.e2e_test.common.assertions import assert_stub_was_called, assert_stub_calls_count, assert_no_calls_in_stub_mode
 
 
 def _run_planner(message: str, thread_ts: str, stub: MCPStubServer, registry: Any) -> None:
@@ -102,9 +110,15 @@ class TestPlannerSurveysNewIdea:
         )
 
         if should_assert_stub_calls(e2e_settings):
-            assert_stub_was_called(e2e_settings, stub, "reply_to_thread") or assert_stub_was_called(e2e_settings, stub, "send_message")
-            assert_no_calls_in_stub_mode(e2e_settings, create_issue_calls, "create_issue", f"Got JIRA issues: {create_issue_calls}")
-            assert_no_calls_in_stub_mode(e2e_settings, create_task_calls, "create_task", f"Got ClickUp tasks: {create_task_calls}")
+            assert_stub_was_called(e2e_settings, stub, "reply_to_thread") or assert_stub_was_called(
+                e2e_settings, stub, "send_message"
+            )
+            assert_no_calls_in_stub_mode(
+                e2e_settings, create_issue_calls, "create_issue", f"Got JIRA issues: {create_issue_calls}"
+            )
+            assert_no_calls_in_stub_mode(
+                e2e_settings, create_task_calls, "create_task", f"Got ClickUp tasks: {create_task_calls}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +181,9 @@ class TestPlannerPostsSurveyPlan:
         )
 
         if should_assert_stub_calls(e2e_settings):
-            assert_stub_was_called(e2e_settings, stub, "reply_to_thread") or assert_stub_was_called(e2e_settings, stub, "send_message")
+            assert_stub_was_called(e2e_settings, stub, "reply_to_thread") or assert_stub_was_called(
+                e2e_settings, stub, "send_message"
+            )
 
             all_reply_text = " ".join(str(b) for b in reply_bodies).lower()
             if not all_reply_text:
@@ -254,12 +270,16 @@ class TestPlannerRejectsIdea:
 
         if should_assert_stub_calls(e2e_settings):
             assert_stub_was_called(e2e_settings, stub, "reply_to_thread")
-            assert_stub_calls_count(e2e_settings, create_issue_calls, min_count=1, message=f"Expected JIRA issue. Got: {create_issue_calls}")
+            assert_stub_calls_count(
+                e2e_settings, create_issue_calls, min_count=1, message=f"Expected JIRA issue. Got: {create_issue_calls}"
+            )
             all_issue_text = " ".join(str(c) for c in create_issue_calls).upper()
             assert "REJECTED" in all_issue_text, f"Expected REJECTED status. Got: {create_issue_calls}"
             dev_lead_in_send = any("dev lead" in str(c).lower() for c in send_message_calls)
             assert not dev_lead_in_send, f"BR-12 violated: {send_message_calls}"
-            assert_no_calls_in_stub_mode(e2e_settings, accepted_status_writes, "create_issue", f"BR-1 violated: {accepted_status_writes}")
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_status_writes, "create_issue", f"BR-1 violated: {accepted_status_writes}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -334,13 +354,17 @@ class TestPlannerAcceptsIdea:
 
         if should_assert_stub_calls(e2e_settings):
             assert_stub_was_called(e2e_settings, stub, "reply_to_thread")
-            assert_stub_calls_count(e2e_settings, create_issue_calls, min_count=1, message=f"Expected JIRA issue. Got: {create_issue_calls}")
+            assert_stub_calls_count(
+                e2e_settings, create_issue_calls, min_count=1, message=f"Expected JIRA issue. Got: {create_issue_calls}"
+            )
             all_issue_text = " ".join(str(c) for c in create_issue_calls).upper()
             assert "OPEN" in all_issue_text, f"Expected OPEN status. Got: {create_issue_calls}"
             assert_stub_was_called(e2e_settings, stub, "send_message", "BR-13: Expected send_message for hand-off")
             dev_lead_in_send = any("dev lead" in str(c).lower() for c in send_message_calls)
             assert dev_lead_in_send, f"Expected [dev lead] in send_message. Got: {send_message_calls}"
-            assert_no_calls_in_stub_mode(e2e_settings, accepted_status_writes, "create_issue", f"BR-1 violated: {accepted_status_writes}")
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_status_writes, "create_issue", f"BR-1 violated: {accepted_status_writes}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -422,13 +446,17 @@ class TestFullPlannerDevLeadLifecycle:
         )
 
         if should_assert_stub_calls(e2e_settings):
-            assert_stub_calls_count(e2e_settings, create_issue_calls, min_count=1, message=f"Expected OPEN issue. Got: {create_issue_calls}")
+            assert_stub_calls_count(
+                e2e_settings, create_issue_calls, min_count=1, message=f"Expected OPEN issue. Got: {create_issue_calls}"
+            )
             all_issue_text = " ".join(str(c) for c in create_issue_calls).upper()
             assert "OPEN" in all_issue_text or "REJECTED" not in all_issue_text
             assert_stub_was_called(e2e_settings, stub, "send_message")
             dev_lead_mention = any("dev lead" in str(c).lower() for c in send_message_calls)
             assert dev_lead_mention, f"Expected [dev lead] in send_message. Got: {send_message_calls}"
             accepted_writes = [c for c in create_issue_calls if "ACCEPTED" in str(c).upper()]
-            assert_no_calls_in_stub_mode(e2e_settings, accepted_writes, "create_issue", f"BR-1 violated: {accepted_writes}")
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_writes, "create_issue", f"BR-1 violated: {accepted_writes}"
+            )
             reply_with_dev_lead = any("dev lead" in str(c).lower() for c in reply_calls)
             assert not reply_with_dev_lead, f"BR-13 violated: hand-off via reply_to_thread"

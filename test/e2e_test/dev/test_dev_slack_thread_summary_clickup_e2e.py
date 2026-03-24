@@ -15,9 +15,6 @@ Tests are skipped when no LLM API key is present.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -30,7 +27,6 @@ from test.e2e_test.conftest import (
     build_e2e_registry,
     skip_without_llm,
 )
-
 
 # ===========================================================================
 # E2E-01: Dev reads thread and updates ClickUp task

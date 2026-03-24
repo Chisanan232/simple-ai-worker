@@ -18,18 +18,15 @@ Business rules asserted across the full chain:
 
 from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
-from test.e2e_test.common.tool_handlers import run_dev_handler_sync
 from test.e2e_test.common.pr_state_management import populate_pr_state
 from test.e2e_test.common.test_infrastructure import make_stub_tracker_registry_dev
+from test.e2e_test.common.tool_handlers import run_dev_handler_sync
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     MCPStubServer,
@@ -39,7 +36,6 @@ from test.e2e_test.conftest import (
 )
 
 from src.ticket.workflow import WorkflowConfig
-
 
 # ===========================================================================
 # E2E-20: Full path S1 → COMPLETE with auto-merge (ClickUp)
@@ -349,8 +345,6 @@ class TestFullPathWithReviewCommentFix:
         merge_calls: list = []
 
         populate_pr_state("cu-022", pr_url, age_seconds=310)
-
-        import src.scheduler.jobs.scan_tickets as scan_mod
 
         stub.register_tool(
             "get_pull_request_reviews",

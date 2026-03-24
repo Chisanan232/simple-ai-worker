@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,6 +22,22 @@ pytestmark = [
     pytest.mark.slow,
 ]
 
+from test.e2e_test.common.assertions import (
+    assert_no_calls_in_stub_mode,
+    assert_stub_calls_count,
+    assert_stub_was_called,
+)
+from test.e2e_test.common.hybrid_mode import (
+    get_service_url,
+    should_assert_stub_calls,
+    should_register_stub_tools,
+)
+from test.e2e_test.common.state_management import reset_planning_state
+from test.e2e_test.common.test_infrastructure import (
+    build_dev_lead_registry,
+    make_settings,
+    make_stub_tracker_registry_planning,
+)
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     E2ESettings,
@@ -35,10 +50,6 @@ from test.e2e_test.conftest import (
 
 from src.ticket.models import TicketComment, TicketRecord
 from src.ticket.workflow import WorkflowConfig
-from test.e2e_test.common.hybrid_mode import get_service_url, should_register_stub_tools, should_assert_stub_calls
-from test.e2e_test.common.test_infrastructure import make_settings, make_stub_tracker_registry_planning, build_dev_lead_registry
-from test.e2e_test.common.assertions import assert_stub_was_called, assert_stub_calls_count, assert_no_calls_in_stub_mode
-from test.e2e_test.common.state_management import reset_planning_state
 
 E2E_PLANNING_WORKFLOW_CONFIG = {
     **E2E_WORKFLOW_CONFIG,
@@ -171,7 +182,12 @@ class TestDevLeadFetchesExistingStory:
             executor.shutdown(wait=False)
 
         if should_assert_stub_calls(e2e_settings):
-            assert_stub_calls_count(e2e_settings, get_issue_calls, min_count=1, message=f"Expected Dev Lead to call get_issue. All calls: {stub.all_calls}")
+            assert_stub_calls_count(
+                e2e_settings,
+                get_issue_calls,
+                min_count=1,
+                message=f"Expected Dev Lead to call get_issue. All calls: {stub.all_calls}",
+            )
             fetched_keys = [c.get("issue_key", c.get("key", "")) for c in get_issue_calls]
             assert any("PROJ-50" in str(k) for k in fetched_keys)
 
@@ -253,10 +269,22 @@ class TestDevLeadBreakdown:
             executor.shutdown(wait=False)
 
         if should_assert_stub_calls(e2e_settings):
-            assert_stub_calls_count(e2e_settings, create_issue_calls, min_count=2, message=f"Expected at least 2 sub-tasks. Got: {len(create_issue_calls)}")
-            assert_stub_calls_count(e2e_settings, add_comment_calls, min_count=1, message="Expected Dev Lead to add comment on parent ticket PROJ-50")
+            assert_stub_calls_count(
+                e2e_settings,
+                create_issue_calls,
+                min_count=2,
+                message=f"Expected at least 2 sub-tasks. Got: {len(create_issue_calls)}",
+            )
+            assert_stub_calls_count(
+                e2e_settings,
+                add_comment_calls,
+                min_count=1,
+                message="Expected Dev Lead to add comment on parent ticket PROJ-50",
+            )
             assert_stub_was_called(e2e_settings, stub, "reply_to_thread")
-            assert_no_calls_in_stub_mode(e2e_settings, accepted_write_calls, "create_issue", f"BR-1 violated: {accepted_write_calls}")
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_write_calls, "create_issue", f"BR-1 violated: {accepted_write_calls}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -339,7 +367,13 @@ class TestDevAgentInitialPlan:
             reset_planning_state(pn_mod)
 
         if should_assert_stub_calls(e2e_settings):
-            assert_stub_calls_count(e2e_settings, add_comment_calls, min_count=1, message="Expected Dev Agent to post development plan. " f"All calls: {[c['tool'] for c in stub.all_calls]}")
+            assert_stub_calls_count(
+                e2e_settings,
+                add_comment_calls,
+                min_count=1,
+                message="Expected Dev Agent to post development plan. "
+                f"All calls: {[c['tool'] for c in stub.all_calls]}",
+            )
             plan_bodies = [c.get("comment", c.get("body", c.get("text", ""))) for c in add_comment_calls]
             has_plan = any(
                 "plan" in body.lower() or "## " in body or "development" in body.lower() for body in plan_bodies
@@ -433,7 +467,12 @@ class TestDevAgentPlanRevision:
             reset_planning_state(pn_mod)
 
         if should_assert_stub_calls(e2e_settings):
-            assert_stub_calls_count(e2e_settings, add_comment_calls, min_count=1, message=f"Expected revised plan. All calls: {[c['tool'] for c in stub.all_calls]}")
+            assert_stub_calls_count(
+                e2e_settings,
+                add_comment_calls,
+                min_count=1,
+                message=f"Expected revised plan. All calls: {[c['tool'] for c in stub.all_calls]}",
+            )
             plan_bodies = [c.get("comment", c.get("body", c.get("text", ""))) for c in add_comment_calls]
             has_rollback_mention = any(
                 "rollback" in body.lower() or "migration" in body.lower() or "revision" in body.lower()

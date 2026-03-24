@@ -15,13 +15,19 @@ Verifies:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
+from test.e2e_test.common.hybrid_mode import (
+    get_service_url,
+    should_register_stub_tools,
+)
+from test.e2e_test.common.test_infrastructure import (
+    make_settings,
+    make_stub_tracker_registry_dev,
+)
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     E2ESettings,
@@ -32,10 +38,6 @@ from test.e2e_test.conftest import (
 )
 
 from src.ticket.workflow import WorkflowConfig
-from test.e2e_test.common.hybrid_mode import get_service_url, should_register_stub_tools, should_assert_stub_calls
-from test.e2e_test.common.test_infrastructure import make_settings, make_stub_tracker_registry_dev
-from test.e2e_test.common.assertions import assert_stub_was_called, assert_stub_calls_count, assert_no_calls_in_stub_mode
-
 
 # ===========================================================================
 # E2E-07: Dev picks up ACCEPTED ClickUp task, transitions statuses, opens PR

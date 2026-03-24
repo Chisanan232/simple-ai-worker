@@ -13,10 +13,7 @@ Verifies:
 
 from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -32,7 +29,6 @@ from test.e2e_test.conftest import (
 )
 
 from src.ticket.workflow import WorkflowConfig
-
 
 # ===========================================================================
 # E2E-11: Auto-merge with approval after timeout

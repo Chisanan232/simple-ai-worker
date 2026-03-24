@@ -13,8 +13,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
-from unittest.mock import MagicMock
+from typing import Optional
 
 import pytest
 
@@ -24,6 +23,11 @@ pytestmark = [
 ]
 
 from test.e2e_test.common.e2e_settings import E2ESettings, get_e2e_settings
+from test.e2e_test.common.state_management import reset_planning_state
+from test.e2e_test.common.test_infrastructure import (
+    make_settings,
+    make_stub_tracker_registry_planning,
+)
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     FakeLLM,
@@ -35,10 +39,6 @@ from test.e2e_test.conftest import (
 
 from src.ticket.models import TicketComment, TicketRecord
 from src.ticket.workflow import WorkflowConfig
-from test.e2e_test.common.hybrid_mode import get_service_url, should_register_stub_tools, should_assert_stub_calls
-from test.e2e_test.common.test_infrastructure import make_settings, make_stub_tracker_registry_planning
-from test.e2e_test.common.assertions import assert_stub_was_called, assert_stub_calls_count, assert_no_calls_in_stub_mode
-from test.e2e_test.common.state_management import reset_planning_state
 
 E2E_PLANNING_WORKFLOW_CONFIG = {
     **E2E_WORKFLOW_CONFIG,

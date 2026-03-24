@@ -22,15 +22,17 @@ import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
+from test.e2e_test.common.assertions import (
+    assert_no_calls_in_stub_mode,
+    assert_stub_calls_count,
+)
 from test.e2e_test.common.e2e_settings import get_e2e_settings
+from test.e2e_test.common.test_infrastructure import build_planner_registry
 from test.e2e_test.conftest import (
     MCPStubServer,
     build_planner_agent_against_stubs,
     skip_without_llm,
 )
-from test.e2e_test.common.hybrid_mode import get_service_url, should_register_stub_tools, should_assert_stub_calls
-from test.e2e_test.common.test_infrastructure import build_planner_registry
-from test.e2e_test.common.assertions import assert_stub_was_called, assert_stub_calls_count, assert_no_calls_in_stub_mode
 
 
 def _run_planner(message: str, thread_ts: str, stub: MCPStubServer, registry: Any) -> None:
@@ -101,8 +103,18 @@ class TestPlannerSurveysNewIdea:
             "Expected Planner to call reply_to_thread or send_message. "
             f"All calls: {[c['tool'] for c in stub.all_calls]}"
         )
-        assert_no_calls_in_stub_mode(get_e2e_settings(), create_task_calls, "create_task", f"Planner must NOT create ClickUp tasks during initial idea discussion. Got: {create_task_calls}")
-        assert_no_calls_in_stub_mode(get_e2e_settings(), create_issue_calls, "create_issue", f"Planner must NOT create JIRA issues during initial idea discussion. Got: {create_issue_calls}")
+        assert_no_calls_in_stub_mode(
+            get_e2e_settings(),
+            create_task_calls,
+            "create_task",
+            f"Planner must NOT create ClickUp tasks during initial idea discussion. Got: {create_task_calls}",
+        )
+        assert_no_calls_in_stub_mode(
+            get_e2e_settings(),
+            create_issue_calls,
+            "create_issue",
+            f"Planner must NOT create JIRA issues during initial idea discussion. Got: {create_issue_calls}",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -194,7 +206,12 @@ class TestPlannerPostsSurveyPlan:
         assert dimension_hits >= 3, (
             f"Expected at least 3 key dimensions. Found {dimension_hits}. " f"Text (first 600): {all_reply_text[:600]}"
         )
-        assert_no_calls_in_stub_mode(get_e2e_settings(), create_task_calls, "create_task", f"Planner must NOT create tasks during survey plan posting. Got: {create_task_calls}")
+        assert_no_calls_in_stub_mode(
+            get_e2e_settings(),
+            create_task_calls,
+            "create_task",
+            f"Planner must NOT create tasks during survey plan posting. Got: {create_task_calls}",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -267,7 +284,12 @@ class TestPlannerRejectsIdea:
         assert stub.was_called(
             "reply_to_thread"
         ), f"Expected Planner to post conclusion. All calls: {[c['tool'] for c in stub.all_calls]}"
-        assert_stub_calls_count(get_e2e_settings(), create_task_calls, min_count=1, message=f"Expected ClickUp task for rejected conclusion. Got: {create_task_calls}")
+        assert_stub_calls_count(
+            get_e2e_settings(),
+            create_task_calls,
+            min_count=1,
+            message=f"Expected ClickUp task for rejected conclusion. Got: {create_task_calls}",
+        )
         all_task_text = " ".join(str(c) for c in create_task_calls).upper()
         assert "REJECTED" in all_task_text, f"Expected task to have REJECTED status. calls: {create_task_calls}"
 
@@ -275,7 +297,9 @@ class TestPlannerRejectsIdea:
             "dev lead" in str(c).lower() or "[dev lead]" in str(c).lower() for c in send_message_calls
         )
         assert not dev_lead_in_send, f"BR-12 violation: Dev Lead mentioned on reject path. calls: {send_message_calls}"
-        assert_no_calls_in_stub_mode(get_e2e_settings(), accepted_status_writes, "create_task", f"BR-1 violated: {accepted_status_writes}")
+        assert_no_calls_in_stub_mode(
+            get_e2e_settings(), accepted_status_writes, "create_task", f"BR-1 violated: {accepted_status_writes}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +378,12 @@ class TestPlannerAcceptsIdea:
         assert stub.was_called(
             "reply_to_thread"
         ), f"Expected conclusion reply. All calls: {[c['tool'] for c in stub.all_calls]}"
-        assert_stub_calls_count(get_e2e_settings(), create_task_calls, min_count=1, message=f"Expected ClickUp task for accepted conclusion. Got: {create_task_calls}")
+        assert_stub_calls_count(
+            get_e2e_settings(),
+            create_task_calls,
+            min_count=1,
+            message=f"Expected ClickUp task for accepted conclusion. Got: {create_task_calls}",
+        )
         all_task_text = " ".join(str(c) for c in create_task_calls).upper()
         assert "OPEN" in all_task_text, f"Expected OPEN task on acceptance. calls: {create_task_calls}"
         assert stub.was_called("send_message"), (
@@ -365,7 +394,9 @@ class TestPlannerAcceptsIdea:
             "dev lead" in str(c).lower() or "[dev lead]" in str(c).lower() for c in send_message_calls
         )
         assert dev_lead_in_send, f"Expected [dev lead] mention in send_message. calls: {send_message_calls}"
-        assert_no_calls_in_stub_mode(get_e2e_settings(), accepted_status_writes, "create_task", f"BR-1 violated: {accepted_status_writes}")
+        assert_no_calls_in_stub_mode(
+            get_e2e_settings(), accepted_status_writes, "create_task", f"BR-1 violated: {accepted_status_writes}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -451,7 +482,12 @@ class TestFullPlannerDevLeadLifecycle:
             registry=registry,
         )
 
-        assert_stub_calls_count(get_e2e_settings(), create_task_calls, min_count=1, message=f"Expected OPEN task created on acceptance. Got: {create_task_calls}")
+        assert_stub_calls_count(
+            get_e2e_settings(),
+            create_task_calls,
+            min_count=1,
+            message=f"Expected OPEN task created on acceptance. Got: {create_task_calls}",
+        )
         all_task_text = " ".join(str(c) for c in create_task_calls).upper()
         assert (
             "OPEN" in all_task_text or "REJECTED" not in all_task_text
@@ -464,7 +500,9 @@ class TestFullPlannerDevLeadLifecycle:
         )
         assert dev_lead_mention, f"Expected [dev lead] in send_message. calls: {send_message_calls}"
         accepted_writes = [c for c in create_task_calls if "ACCEPTED" in str(c).upper()]
-        assert_no_calls_in_stub_mode(get_e2e_settings(), accepted_writes, "create_task", f"BR-1 violated: {accepted_writes}")
+        assert_no_calls_in_stub_mode(
+            get_e2e_settings(), accepted_writes, "create_task", f"BR-1 violated: {accepted_writes}"
+        )
 
         reply_with_dev_lead = any("dev lead" in str(c).lower() or "[dev lead]" in str(c).lower() for c in reply_calls)
         assert (

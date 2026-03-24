@@ -13,7 +13,6 @@ Verifies:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -27,7 +26,6 @@ from test.e2e_test.conftest import (
     build_e2e_registry,
     skip_without_llm,
 )
-
 
 # ===========================================================================
 # E2E-16: Fixes changes-requested and replies to reviewer

@@ -4,7 +4,7 @@ Provides factory functions for creating common test objects like
 TicketRecord, TicketComment, and workflow configurations.
 """
 
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from src.ticket.models import TicketComment, TicketRecord
 

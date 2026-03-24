@@ -41,6 +41,7 @@ def register_conditional_tool(
         calls_list: List to append call arguments to
         handler: Function to handle the tool call and return response
     """
+
     def tracking_handler(args: Dict[str, Any]) -> Any:
         calls_list.append(args)
         return handler(args)
