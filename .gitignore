@@ -31,7 +31,9 @@ scripts/ci/get-all-tests.sh
 
 ## Secret info
 .env*
-!.env.example
+!*.env*example*
+## E2E test secrets (co-located inside test/e2e_test/ — not matched by .env* glob)
+test/e2e_test/.env.e2e
 
 ## Docker Compose
 ## Per-developer local overrides — not committed; track the .example file instead.

@@ -54,7 +54,7 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import TYPE_CHECKING, Dict, List, Optional, Set
 
-from crewai import Task
+from crewai import Agent, Task
 
 from src.crew.builder import CrewBuilder
 from src.ticket.models import TicketRecord
@@ -204,6 +204,45 @@ _REVISE_PLAN_TASK_EXPECTED_OUTPUT: str = (
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _reset_agent_state(agent: "object") -> None:
+    """Clear the agent executor's message history before a new crew run.
+
+    When the same :class:`~crewai.Agent` object is reused across multiple
+    sequential ``crew.kickoff()`` calls (e.g. planning three tickets one after
+    another in a single ``ThreadPoolExecutor`` worker thread), CrewAI's
+    ``CrewAgentExecutor._setup_messages()`` **appends** new messages to the
+    existing list rather than clearing it.  This causes the conversation
+    history to grow across runs, which makes the LLM perceive it is partway
+    through a long conversation rather than starting fresh.
+
+    Clearing ``agent_executor.messages`` before each new crew run ensures
+    each ticket gets an independent, clean planning session.
+
+    Args:
+        agent: A ``crewai.Agent`` (typed as ``object`` to avoid a hard import
+               that would create a circular dependency).  The attribute access
+               is guarded so that non-Agent objects are silently ignored.
+    """
+    executor = getattr(agent, "agent_executor", None)
+    if executor is not None and hasattr(executor, "messages"):
+        try:
+            executor.messages.clear()
+            logger.debug(
+                "_reset_agent_state: cleared agent_executor.messages for agent %r.",
+                getattr(agent, "role", repr(agent)),
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug(
+                "_reset_agent_state: could not clear messages for agent %r — skipping.",
+                getattr(agent, "role", repr(agent)),
+            )
+
+
+# ---------------------------------------------------------------------------
 # Worker: initial plan
 # ---------------------------------------------------------------------------
 
@@ -225,7 +264,7 @@ def _create_initial_plan(
         registry:  The shared :class:`~src.agents.registry.AgentRegistry`.
     """
     try:
-        dev_agent = registry["dev_agent"]
+        dev_agent: Agent = registry["dev_agent"]
     except KeyError:
         logger.error(
             "_create_initial_plan: 'dev_agent' not found in registry for ticket %s.",
@@ -244,6 +283,10 @@ def _create_initial_plan(
         ),
         agent=dev_agent,
     )
+    # Clear stale conversation history from any previous crew run on this agent.
+    # CrewAgentExecutor._setup_messages() appends (not replaces) messages, so
+    # without this reset the agent would start each new ticket mid-conversation.
+    _reset_agent_state(dev_agent)
     crew = CrewBuilder.build(
         agents=[dev_agent],
         tasks=[task],
@@ -318,6 +361,8 @@ def _revise_plan(
         ),
         agent=dev_agent,
     )
+    # Clear stale conversation history from any previous crew run on this agent.
+    _reset_agent_state(dev_agent)
     crew = CrewBuilder.build(
         agents=[dev_agent],
         tasks=[task],

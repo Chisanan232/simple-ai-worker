@@ -1,0 +1,139 @@
+# =============================================================================
+# test/e2e_test/docker-compose.e2e.yml — E2E Test MCP Service Stack
+# =============================================================================
+#
+# Starts only the MCP backend servers needed for LIVE MODE E2E tests.
+# Does NOT start ai-scheduler or ai-slack-webhook — pytest drives the
+# Python application code directly.
+#
+# Prerequisites:
+#   cp test/e2e_test/.env.e2e.example test/e2e_test/.env.e2e
+#   <fill in real credentials — use DEDICATED TEST ACCOUNTS only>
+#
+# Usage (from project root):
+#   docker compose \
+#     -f test/e2e_test/docker-compose.e2e.yml \
+#     --env-file test/e2e_test/.env.e2e \
+#     up -d --wait
+#   uv run pytest -m "e2e" test/e2e_test/
+#   docker compose -f test/e2e_test/docker-compose.e2e.yml down
+#
+# Port convention (live mode):
+#   18100 = JIRA MCP     (offset +10000 from main stack port 8100)
+#   18101 = ClickUp MCP  (offset +10000 from main stack port 8101)
+#   18102 = GitHub MCP   (offset +10000 from main stack port 8102)
+#   18103 = Slack MCP    (offset +10000 from main stack port 8103)
+#
+# Different ports allow both stacks to run simultaneously without conflicts.
+# =============================================================================
+
+name: simple-ai-worker-e2e
+
+networks:
+  e2e-network:
+    driver: bridge
+
+services:
+
+  # --------------------------------------------------------------------------
+  # MCP Server: GitHub
+  # https://github.com/github/github-mcp-server
+  # --------------------------------------------------------------------------
+  mcp-github-e2e:
+    image: ghcr.io/github/github-mcp-server:latest
+    container_name: mcp-github-e2e
+    command: ["http", "--port", "18102"]
+    networks:
+      - e2e-network
+    environment:
+      GITHUB_PERSONAL_ACCESS_TOKEN: ${E2E_MCP_GITHUB_TOKEN}
+      GITHUB_TOOLSETS: "all"
+      GITHUB_DYNAMIC_TOOLSETS: 1
+    ports:
+      - "18102:18102"
+    healthcheck:
+      # Distroless image — no shell/curl. Use the binary's built-in subcommand.
+      test: ["CMD", "/server/github-mcp-server", "list-scopes"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # MCP Server: Slack
+  # https://github.com/Chisanan232/slack-mcp-server
+  # --------------------------------------------------------------------------
+  mcp-slack-e2e:
+    image: ghcr.io/chisanan232/slack-mcp-server:latest
+    container_name: mcp-slack-e2e
+    networks:
+      - e2e-network
+    environment:
+      SLACK_BOT_TOKEN: ${E2E_MCP_SLACK_TOKEN}
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "18103"
+      MCP_TRANSPORT: "sse"
+    ports:
+      - "18103:18103"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "python3 -c \"import urllib.request; c=urllib.request.urlopen('http://localhost:18103/sse', timeout=3); c.close()\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # MCP Server: JIRA (sooperset/mcp-atlassian)
+  # https://github.com/sooperset/mcp-atlassian
+  # --------------------------------------------------------------------------
+  mcp-jira-e2e:
+    image: ghcr.io/sooperset/mcp-atlassian:latest
+    container_name: mcp-jira-e2e
+    command: ["--transport", "sse", "--port", "18100"]
+    networks:
+      - e2e-network
+    environment:
+      JIRA_URL: ${E2E_ATLASSIAN_URL}
+      JIRA_USERNAME: ${E2E_ATLASSIAN_EMAIL}
+      JIRA_API_TOKEN: ${E2E_MCP_JIRA_TOKEN}
+    ports:
+      - "18100:18100"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:18100/sse', timeout=3)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # --------------------------------------------------------------------------
+  # MCP Server: ClickUp
+  # https://github.com/Chisanan232/clickup-mcp-server
+  # --------------------------------------------------------------------------
+  mcp-clickup-e2e:
+    image: ghcr.io/chisanan232/clickup-mcp-server:latest
+    container_name: mcp-clickup-e2e
+    networks:
+      - e2e-network
+    environment:
+      # MCP server configuration
+      API_TOKEN: ${E2E_MCP_CLICKUP_TOKEN}
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "18101"
+      MCP_TRANSPORT: "sse"
+#      MCP_TRANSPORT: "http-streaming"
+      # Leave unset to use the token's default workspace
+      CLICKUP_TEAM_ID: ${E2E_CLICKUP_TEAM_ID:-}
+    ports:
+      - "18101:18101"
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import socket; s=socket.socket(); s.connect(('localhost', 18101)); s.close()\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
