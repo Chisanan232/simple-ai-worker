@@ -32,41 +32,9 @@ from test.e2e_test.conftest import (
 )
 
 from src.ticket.workflow import WorkflowConfig
-
-
-def _make_e2e_settings(timeout: int = 300) -> Any:
-    s = MagicMock()
-    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = timeout
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    s.MAX_CONCURRENT_DEV_AGENTS = 1
-    return s
-
-
-def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
-    """Build a stub TrackerRegistry that returns pre-seeded TicketRecords.
-
-    Used to bypass the real REST API calls in ``scan_and_dispatch_job`` when
-    running against the MCP stub server (E2E_USE_TESTCONTAINERS=false).
-    """
-
-    _tickets = list(accepted_tickets or [])
-
-    class _StubTracker:
-        def fetch_tickets_for_operation(self, op: Any) -> list:
-            from src.ticket.workflow import WorkflowOperation
-
-            if op == WorkflowOperation.SCAN_FOR_WORK:
-                return _tickets
-            return []
-
-        def fetch_ticket_comments(self, ticket_id: str) -> list:
-            return []
-
-    class _StubTrackerRegistry:
-        def get(self, source: str) -> _StubTracker:
-            return _StubTracker()
-
-    return _StubTrackerRegistry()
+from test.e2e_test.common.hybrid_mode import get_service_url, should_register_stub_tools, should_assert_stub_calls
+from test.e2e_test.common.test_infrastructure import make_settings, make_stub_tracker_registry_dev
+from test.e2e_test.common.assertions import assert_stub_was_called, assert_stub_calls_count, assert_no_calls_in_stub_mode
 
 
 # ===========================================================================
@@ -89,12 +57,7 @@ class TestDevPicksUpAcceptedTicket:
         from src.ticket.models import TicketRecord
 
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["clickup"]
-        else:
-            url = stub.url
+        url = get_service_url("clickup", e2e_settings, mcp_urls, stub)
 
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -102,8 +65,7 @@ class TestDevPicksUpAcceptedTicket:
         pr_calls: list = []
         accepted_write_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool(
                 "search_tasks",
                 lambda args: [
@@ -155,7 +117,7 @@ class TestDevPicksUpAcceptedTicket:
         registry = build_e2e_registry(dev_agent)
 
         # Bypass the real REST API — feed the ACCEPTED ticket directly.
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_dev(
             accepted_tickets=[
                 TicketRecord(
                     id="cu-001",
@@ -171,7 +133,7 @@ class TestDevPicksUpAcceptedTicket:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -265,7 +227,7 @@ class TestDevPicksUpAcceptedTicket:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
             )
@@ -335,7 +297,7 @@ class TestDevSkipsRejectedTicket:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
             )
@@ -392,7 +354,7 @@ class TestInProgressTicketNotPickedUp:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
             )

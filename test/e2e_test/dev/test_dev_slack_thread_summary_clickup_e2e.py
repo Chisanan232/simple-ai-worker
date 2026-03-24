@@ -23,30 +23,13 @@ import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
+from test.e2e_test.common.tool_handlers import run_dev_handler_sync
 from test.e2e_test.conftest import (
     MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
 )
-
-
-def _run_dev_handler_sync(event: dict, registry: Any) -> None:
-    """Run dev_handler and block until the background crew completes."""
-    from src.slack_app.handlers.dev import dev_handler
-
-    executor = ThreadPoolExecutor(max_workers=1)
-    try:
-        dev_handler(
-            text=event.get("text", ""),
-            event=event,
-            say=MagicMock(),
-            registry=registry,
-            executor=executor,
-        )
-        executor.shutdown(wait=True, cancel_futures=False)
-    finally:
-        executor.shutdown(wait=False)
 
 
 # ===========================================================================
@@ -105,7 +88,7 @@ class TestDevReadsThreadAndUpdatesTicket:
             clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
-        _run_dev_handler_sync(
+        run_dev_handler_sync(
             event={
                 "text": "<@UBOT> [dev] please update the ticket",
                 "channel": "C001",
@@ -160,7 +143,7 @@ class TestDevAsksForTicketWhenNoneFound:
             clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
-        _run_dev_handler_sync(
+        run_dev_handler_sync(
             event={
                 "text": "<@UBOT> [dev] read this thread",
                 "channel": "C002",
@@ -236,7 +219,7 @@ class TestSlackPermalinkInComment:
             clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
-        _run_dev_handler_sync(
+        run_dev_handler_sync(
             event={
                 "text": "<@UBOT> [dev] update ticket with this discussion",
                 "channel": channel_id,
@@ -301,7 +284,7 @@ class TestNoNewTicketCreated:
             clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
-        _run_dev_handler_sync(
+        run_dev_handler_sync(
             event={"text": "<@UBOT> [dev] update ticket", "channel": "C003", "thread_ts": "333.444", "ts": "333.444"},
             registry=registry,
         )
@@ -370,7 +353,7 @@ class TestClickUpTaskUpdated:
             clickup_url=url,
         )
         registry = build_e2e_registry(dev_agent)
-        _run_dev_handler_sync(
+        run_dev_handler_sync(
             event={
                 "text": "<@UBOT> [dev] update the clickup task",
                 "channel": "C004",
