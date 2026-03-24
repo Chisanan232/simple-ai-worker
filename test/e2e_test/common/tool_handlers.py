@@ -3,7 +3,11 @@
 Provides helpers for registering stub tools with tracking and response logic.
 """
 
+from __future__ import annotations
+
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List
+from unittest.mock import MagicMock
 
 
 def register_tracking_tool(
@@ -76,3 +80,30 @@ def make_conditional_lambda(
         A lambda function suitable for stub.register_tool()
     """
     return lambda args: (calls_list.append(args) or handler(args))
+
+
+def run_dev_handler_sync(event: dict, registry: Any) -> None:
+    """Run dev_handler and block until the background crew completes.
+
+    Used in E2E tests to synchronously execute the dev Slack handler,
+    which normally dispatches work asynchronously. This ensures the
+    handler completes before assertions are made.
+
+    Args:
+        event: Slack event dict with text, channel, thread_ts, ts
+        registry: Agent registry containing the dev agent
+    """
+    from src.slack_app.handlers.dev import dev_handler
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        dev_handler(
+            text=event.get("text", ""),
+            event=event,
+            say=MagicMock(),
+            registry=registry,
+            executor=executor,
+        )
+        executor.shutdown(wait=True, cancel_futures=False)
+    finally:
+        executor.shutdown(wait=False)
