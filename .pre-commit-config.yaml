@@ -2,7 +2,7 @@ exclude: '.github/|docs/'
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: v6.0.0
     hooks:
       - id: check-yaml
         args: ['--unsafe']
@@ -12,14 +12,14 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/PyCQA/isort
-    rev: 6.0.1
+    rev: 8.0.1
     hooks:
       - id: isort
         args: # arguments to configure black
           - --profile=black
 
   - repo: https://github.com/PyCQA/autoflake
-    rev: v2.3.1
+    rev: v2.3.3
     hooks:
       - id: autoflake
         args:
@@ -27,8 +27,8 @@ repos:
           - --ignore-init-module-imports
           - --in-place
 
-  - repo: https://github.com/psf/black
-    rev: 25.1.0
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 26.3.1
     hooks:
       - id: black
         args: # arguments to configure black
@@ -46,7 +46,7 @@ repos:
             dist"""
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.16.0
+    rev: v1.19.1
     hooks:
       - id: mypy
         package: src,test
@@ -59,6 +59,6 @@ repos:
 
   - repo: https://github.com/astral-sh/uv-pre-commit
     # uv version.
-    rev: 0.7.13
+    rev: 0.10.12
     hooks:
       - id: uv-lock
