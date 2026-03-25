@@ -12,8 +12,6 @@ are configured in ``test/e2e_test/.env.e2e``.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -23,6 +21,14 @@ pytestmark = [
 ]
 
 from test.e2e_test.common.e2e_settings import get_e2e_settings
+from test.e2e_test.common.hybrid_mode import (
+    get_service_url,
+    should_register_stub_tools,
+)
+from test.e2e_test.common.test_infrastructure import (
+    make_settings,
+    make_stub_tracker_registry_dev,
+)
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     E2ESettings,
@@ -34,41 +40,6 @@ from test.e2e_test.conftest import (
 
 from src.ticket.models import TicketRecord
 from src.ticket.workflow import WorkflowConfig
-
-
-def _make_e2e_settings(timeout: int = 300) -> Any:
-    s = MagicMock()
-    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = timeout
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    s.MAX_CONCURRENT_DEV_AGENTS = 1
-    return s
-
-
-def _make_stub_tracker_registry(accepted_tickets: list[TicketRecord] | None = None) -> Any:
-    """Build a stub TrackerRegistry that returns pre-seeded TicketRecords.
-
-    Used to bypass the real REST API calls in ``scan_and_dispatch_job`` when
-    running against the MCP stub server (E2E_USE_TESTCONTAINERS=false).
-    """
-    _tickets = list(accepted_tickets or [])
-
-    class _StubTracker:
-        def fetch_tickets_for_operation(self, op: Any) -> list:
-            from src.ticket.workflow import WorkflowOperation
-
-            if op == WorkflowOperation.SCAN_FOR_WORK:
-                return _tickets
-            return []
-
-        def fetch_ticket_comments(self, ticket_id: str) -> list:
-            return []
-
-    class _StubTrackerRegistry:
-        def get(self, source: str) -> _StubTracker:
-            return _StubTracker()
-
-    return _StubTrackerRegistry()
-
 
 # ===========================================================================
 # E2E-07: Dev picks up ACCEPTED JIRA issue, transitions statuses, opens PR
@@ -88,12 +59,7 @@ class TestDevPicksUpAcceptedTicket:
         from src.scheduler.jobs.scan_tickets import scan_and_dispatch_job
 
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
 
@@ -101,8 +67,7 @@ class TestDevPicksUpAcceptedTicket:
         pr_calls: list = []
         accepted_write_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool(
                 "search_issues",
                 lambda args: [
@@ -151,7 +116,7 @@ class TestDevPicksUpAcceptedTicket:
         registry = build_e2e_registry(dev_agent)
 
         # Bypass the real REST API — feed the ACCEPTED ticket directly.
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_dev(
             accepted_tickets=[
                 TicketRecord(
                     id="PROJ-10",
@@ -167,7 +132,7 @@ class TestDevPicksUpAcceptedTicket:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -247,7 +212,7 @@ class TestDevPicksUpAcceptedTicket:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
             )
@@ -307,7 +272,7 @@ class TestDevSkipsRejectedTicket:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
             )
@@ -365,7 +330,7 @@ class TestInProgressTicketNotPickedUp:
         try:
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
             )

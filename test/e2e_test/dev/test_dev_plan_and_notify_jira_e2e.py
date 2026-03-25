@@ -13,8 +13,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Optional
-from unittest.mock import MagicMock
+from typing import Optional
 
 import pytest
 
@@ -24,6 +23,11 @@ pytestmark = [
 ]
 
 from test.e2e_test.common.e2e_settings import E2ESettings, get_e2e_settings
+from test.e2e_test.common.state_management import reset_planning_state
+from test.e2e_test.common.test_infrastructure import (
+    make_settings,
+    make_stub_tracker_registry_planning,
+)
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     FakeLLM,
@@ -41,43 +45,6 @@ E2E_PLANNING_WORKFLOW_CONFIG = {
     "open_for_dev": {"status_value": "OPEN", "human_only": False},
     "in_planning": {"status_value": "IN PLANNING", "human_only": True},
 }
-
-
-def _make_settings() -> Any:
-    s = MagicMock()
-    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = 300
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    s.MAX_CONCURRENT_DEV_AGENTS = 1
-    return s
-
-
-def _make_stub_tracker_registry(
-    open_tickets: list | None = None,
-    in_planning_tickets: list | None = None,
-    comments_by_ticket: dict | None = None,
-) -> Any:
-    _open = open_tickets or []
-    _planning = in_planning_tickets or []
-    _comments = comments_by_ticket or {}
-
-    class _StubTracker:
-        def fetch_tickets_for_operation(self, op: Any) -> list:
-            from src.ticket.workflow import WorkflowOperation
-
-            if op == WorkflowOperation.OPEN_FOR_DEV:
-                return _open
-            if op == WorkflowOperation.IN_PLANNING:
-                return _planning
-            return []
-
-        def fetch_ticket_comments(self, ticket_id: str) -> list:
-            return _comments.get(ticket_id, [])
-
-    class _StubTrackerRegistry:
-        def get(self, source: str) -> _StubTracker:
-            return _StubTracker()
-
-    return _StubTrackerRegistry()
 
 
 # ===========================================================================
@@ -135,20 +102,19 @@ class TestDevAgentGeneratesInitialPlan:
         )
         registry = build_e2e_registry(dev_agent)
 
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_planning(
             open_tickets=[
                 TicketRecord(id="PROJ-20", source="jira", title="Implement OAuth2 login", url="", raw_status="OPEN"),
             ],
         )
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -260,21 +226,20 @@ class TestDevAgentBatchPlanning:
         )
         registry = build_e2e_registry(dev_agent)
 
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_planning(
             open_tickets=[
                 TicketRecord(id=key, source="jira", title=d["fields"]["summary"], url="", raw_status="OPEN")
                 for key, d in issue_details.items()
             ],
         )
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=3)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -342,7 +307,7 @@ class TestDispatchGuardPreventsDoublePlanning:
         )
         registry = build_e2e_registry(dev_agent)
 
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_planning(
             open_tickets=[
                 TicketRecord(id="PROJ-20", source="jira", title="Implement OAuth2 login", url="", raw_status="OPEN"),
             ],
@@ -356,7 +321,7 @@ class TestDispatchGuardPreventsDoublePlanning:
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -431,21 +396,20 @@ class TestDevAgentRevisesPlanOnHumanFeedback:
             source="jira",
         )
 
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_planning(
             in_planning_tickets=[
                 TicketRecord(id="PROJ-21", source="jira", title="DB migration tool", url="", raw_status="IN PLANNING"),
             ],
             comments_by_ticket={"PROJ-21": [human_comment]},
         )
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -530,22 +494,21 @@ class TestNoRevisionWhenNoNewComments:
             source="jira",
         )
 
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_planning(
             in_planning_tickets=[
                 TicketRecord(id="PROJ-21", source="jira", title="DB migration tool", url="", raw_status="IN PLANNING"),
             ],
             comments_by_ticket={"PROJ-21": [old_comment]},
         )
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
         pn_mod._plan_comment_watermarks["PROJ-21"] = time.time() - 60
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -616,20 +579,19 @@ class TestPlanCommentIncludesHumanNotification:
         )
         registry = build_e2e_registry(dev_agent)
 
-        tracker_registry = _make_stub_tracker_registry(
+        tracker_registry = make_stub_tracker_registry_planning(
             open_tickets=[
                 TicketRecord(id="PROJ-20", source="jira", title="Implement OAuth2 login", url="", raw_status="OPEN"),
             ],
         )
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
                 tracker_registry=tracker_registry,
@@ -737,17 +699,16 @@ class TestFullPlanningLoop:
         stub.register_tool("reply_to_thread", lambda args: {"ok": True})
         stub.register_tool("send_message", lambda args: {"ok": True})
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_planning(
                     open_tickets=[
                         TicketRecord(
                             id="PROJ-22", source="jira", title="Search indexing service", url="", raw_status="OPEN"
@@ -798,10 +759,10 @@ class TestFullPlanningLoop:
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_planning(
                     in_planning_tickets=[
                         TicketRecord(
                             id="PROJ-22",

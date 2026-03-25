@@ -18,15 +18,15 @@ Business rules asserted across the full chain:
 
 from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
+from test.e2e_test.common.pr_state_management import populate_pr_state
+from test.e2e_test.common.test_infrastructure import make_stub_tracker_registry_dev
+from test.e2e_test.common.tool_handlers import run_dev_handler_sync
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     MCPStubServer,
@@ -35,67 +35,7 @@ from test.e2e_test.conftest import (
     skip_without_llm,
 )
 
-from src.ticket.models import PRRecord
 from src.ticket.workflow import WorkflowConfig
-
-
-def _make_e2e_settings(timeout: int = 300) -> Any:
-    s = MagicMock()
-    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = timeout
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    s.MAX_CONCURRENT_DEV_AGENTS = 1
-    return s
-
-
-def _pre_populate_pr(ticket_id: str, pr_url: str, age_seconds: float = 310.0) -> None:
-    import src.scheduler.jobs.scan_tickets as scan_mod
-
-    scan_mod._open_prs[ticket_id] = PRRecord(
-        ticket_id=ticket_id,
-        pr_url=pr_url,
-        opened_at_utc=time.time() - age_seconds,
-    )
-    scan_mod._prs_under_review[ticket_id] = pr_url
-
-
-def _run_dev_handler_sync(event: dict, registry: Any) -> None:
-    from src.slack_app.handlers.dev import dev_handler
-
-    executor = ThreadPoolExecutor(max_workers=1)
-    try:
-        dev_handler(
-            text=event.get("text", ""),
-            event=event,
-            say=MagicMock(),
-            registry=registry,
-            executor=executor,
-        )
-        executor.shutdown(wait=True)
-    finally:
-        executor.shutdown(wait=False)
-
-
-def _make_stub_tracker_registry(accepted_tickets: list | None = None) -> Any:
-    """Stub TrackerRegistry that bypasses the real REST API for scan_and_dispatch_job."""
-    _tickets = list(accepted_tickets or [])
-
-    class _StubTracker:
-        def fetch_tickets_for_operation(self, op: Any) -> list:
-            from src.ticket.workflow import WorkflowOperation
-
-            if op == WorkflowOperation.SCAN_FOR_WORK:
-                return _tickets
-            return []
-
-        def fetch_ticket_comments(self, ticket_id: str) -> list:
-            return []
-
-    class _StubTrackerRegistry:
-        def get(self, source: str) -> _StubTracker:
-            return _StubTracker()
-
-    return _StubTrackerRegistry()
-
 
 # ===========================================================================
 # E2E-20: Full path S1 → COMPLETE with auto-merge (ClickUp)
@@ -107,6 +47,7 @@ class TestFullPathS1ToComplete:
     def test_full_path_s1_to_complete_auto_merge(
         self,
         mcp_stub: MCPStubServer,
+        pr_merge_settings_with_timeout,
     ) -> None:
         """E2E-20 (ClickUp): Thread summary → ACCEPTED → dev → PR → approve → auto-merge → COMPLETE."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -201,7 +142,7 @@ class TestFullPathS1ToComplete:
         registry = build_e2e_registry(dev_agent)
 
         # Step 1: Thread summary (S3a)
-        _run_dev_handler_sync(
+        run_dev_handler_sync(
             event={
                 "text": "<@UBOT> [dev] read this thread",
                 "channel": "C010",
@@ -218,10 +159,10 @@ class TestFullPathS1ToComplete:
 
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=pr_merge_settings_with_timeout(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_dev(
                     accepted_tickets=[
                         TicketRecord(
                             id="cu-020",
@@ -239,12 +180,12 @@ class TestFullPathS1ToComplete:
 
         # Step 3: Pre-seed PR for merge watcher
         if not scan_mod._open_prs:
-            _pre_populate_pr("cu-020", pr_url, age_seconds=310)
+            populate_pr_state("cu-020", pr_url, age_seconds=310)
 
         # Step 4: Auto-merge (S7b)
         pr_merge_watcher_job(
             registry=registry,
-            settings=_make_e2e_settings(timeout=300),
+            settings=pr_merge_settings_with_timeout(timeout=300),
             executor=ThreadPoolExecutor(max_workers=1),
             workflow=workflow,
         )
@@ -268,6 +209,7 @@ class TestFullPathUserMergeBeforeTimeout:
         self,
         mcp_stub: MCPStubServer,
         user_merged_tool_order: None,
+        pr_merge_settings_with_timeout,
     ) -> None:
         """E2E-21 (ClickUp): Dev opens PR → user merges before timeout → COMPLETE transition."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -338,10 +280,10 @@ class TestFullPathUserMergeBeforeTimeout:
 
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=pr_merge_settings_with_timeout(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_dev(
                     accepted_tickets=[
                         TicketRecord(
                             id="cu-021",
@@ -358,11 +300,11 @@ class TestFullPathUserMergeBeforeTimeout:
             executor.shutdown(wait=False)
 
         if not scan_mod._open_prs:
-            _pre_populate_pr("cu-021", pr_url, age_seconds=60)
+            populate_pr_state("cu-021", pr_url, age_seconds=60)
 
         pr_merge_watcher_job(
             registry=registry,
-            settings=_make_e2e_settings(timeout=300),
+            settings=pr_merge_settings_with_timeout(timeout=300),
             executor=ThreadPoolExecutor(max_workers=1),
             workflow=workflow,
         )
@@ -386,6 +328,7 @@ class TestFullPathWithReviewCommentFix:
     def test_full_path_with_review_comment_fix_cycle(
         self,
         mcp_stub: MCPStubServer,
+        pr_review_settings,
     ) -> None:
         """E2E-22 (ClickUp): Dev opens PR → reviewer requests changes → fix → re-review → merge."""
         from src.scheduler.jobs.pr_review_comment_handler import (
@@ -401,11 +344,7 @@ class TestFullPathWithReviewCommentFix:
         approve_calls: list = []
         merge_calls: list = []
 
-        _pre_populate_pr("cu-022", pr_url, age_seconds=310)
-
-        import src.scheduler.jobs.scan_tickets as scan_mod
-
-        scan_mod._prs_under_review["cu-022"] = pr_url
+        populate_pr_state("cu-022", pr_url, age_seconds=310)
 
         stub.register_tool(
             "get_pull_request_reviews",
@@ -450,10 +389,9 @@ class TestFullPathWithReviewCommentFix:
         )
         registry = build_e2e_registry(dev_agent)
 
-        settings = _make_e2e_settings(timeout=300)
         pr_review_comment_handler_job(
             registry=registry,
-            settings=settings,
+            settings=pr_review_settings,
             executor=ThreadPoolExecutor(max_workers=1),
         )
 
@@ -472,6 +410,7 @@ class TestAskAndWaitWhenNoTicketId:
         self,
         mcp_stub: MCPStubServer,
         reply_only_tool_order: None,
+        e2e_settings,
     ) -> None:
         """E2E-23 (ClickUp): No ticket ID in thread → ask, add_comment NOT called."""
         stub = mcp_stub
@@ -501,7 +440,7 @@ class TestAskAndWaitWhenNoTicketId:
         )
         registry = build_e2e_registry(dev_agent)
 
-        _run_dev_handler_sync(
+        run_dev_handler_sync(
             event={
                 "text": "<@UBOT> [dev] read this discussion",
                 "channel": "C020",
@@ -527,6 +466,7 @@ class TestRejectionHaltsProcessing:
     def test_rejection_halts_all_processing(
         self,
         mcp_stub: MCPStubServer,
+        pr_merge_settings,
     ) -> None:
         """E2E-24 (ClickUp): REJECTED ticket → no dispatch, no PR, not in watcher dicts."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -567,10 +507,10 @@ class TestRejectionHaltsProcessing:
 
             scan_and_dispatch_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=pr_merge_settings,
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_dev(
                     accepted_tickets=[
                         TicketRecord(
                             id="cu-023",

@@ -22,20 +22,23 @@ pytestmark = [
     pytest.mark.slow,
 ]
 
+from test.e2e_test.common.assertions import (
+    assert_no_calls_in_stub_mode,
+    assert_stub_calls_count,
+    assert_stub_was_called,
+)
+from test.e2e_test.common.hybrid_mode import (
+    get_service_url,
+    should_assert_stub_calls,
+    should_register_stub_tools,
+)
+from test.e2e_test.common.test_infrastructure import build_planner_registry
 from test.e2e_test.conftest import (
     E2ESettings,
     MCPStubServer,
     build_planner_agent_against_stubs,
     skip_without_llm,
 )
-
-
-def _build_planner_registry(planner_agent: Any) -> Any:
-    from src.agents.registry import AgentRegistry
-
-    registry = AgentRegistry()
-    registry.register("planner", planner_agent)
-    return registry
 
 
 def _run_planner(message: str, thread_ts: str, stub: MCPStubServer, registry: Any) -> None:
@@ -70,18 +73,12 @@ class TestPlannerSurveysNewIdea:
     ) -> None:
         """E2E-PI-01 (JIRA): Ambiguous idea → Planner responds, no issue created."""
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         create_issue_calls: list = []
         create_task_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool("reply_to_thread", lambda args: {"ok": True})
             stub.register_tool("send_message", lambda args: {"ok": True})
             stub.register_tool(
@@ -103,7 +100,7 @@ class TestPlannerSurveysNewIdea:
             stub.register_tool("create_task", lambda args: (create_task_calls.append(args) or {"id": "cu-new"}))
 
         planner_agent = build_planner_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_planner_registry(planner_agent)
+        registry = build_planner_registry(planner_agent)
 
         _run_planner(
             message="[planner] I want to build a B2B SaaS tool for restaurant inventory",
@@ -112,11 +109,16 @@ class TestPlannerSurveysNewIdea:
             registry=registry,
         )
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert stub.was_called("reply_to_thread") or stub.was_called("send_message")
-            assert len(create_issue_calls) == 0, f"Got JIRA issues: {create_issue_calls}"
-            assert len(create_task_calls) == 0, f"Got ClickUp tasks: {create_task_calls}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_was_called(e2e_settings, stub, "reply_to_thread") or assert_stub_was_called(
+                e2e_settings, stub, "send_message"
+            )
+            assert_no_calls_in_stub_mode(
+                e2e_settings, create_issue_calls, "create_issue", f"Got JIRA issues: {create_issue_calls}"
+            )
+            assert_no_calls_in_stub_mode(
+                e2e_settings, create_task_calls, "create_task", f"Got ClickUp tasks: {create_task_calls}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -134,18 +136,12 @@ class TestPlannerPostsSurveyPlan:
     ) -> None:
         """E2E-PI-02 (JIRA): After exchanges, Planner posts survey plan covering key dimensions."""
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         reply_bodies: list = []
         create_issue_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool(
                 "reply_to_thread",
                 lambda args: (
@@ -175,7 +171,7 @@ class TestPlannerPostsSurveyPlan:
             stub.register_tool("search_tasks", lambda args: [])
 
         planner_agent = build_planner_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_planner_registry(planner_agent)
+        registry = build_planner_registry(planner_agent)
 
         _run_planner(
             message="[planner] Please give me the full survey plan now",
@@ -184,9 +180,10 @@ class TestPlannerPostsSurveyPlan:
             registry=registry,
         )
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert stub.was_called("reply_to_thread") or stub.was_called("send_message")
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_was_called(e2e_settings, stub, "reply_to_thread") or assert_stub_was_called(
+                e2e_settings, stub, "send_message"
+            )
 
             all_reply_text = " ".join(str(b) for b in reply_bodies).lower()
             if not all_reply_text:
@@ -207,7 +204,7 @@ class TestPlannerPostsSurveyPlan:
             assert dimension_hits >= 3, (
                 f"Expected at least 3 dimensions. Found {dimension_hits}. " f"Text: {all_reply_text[:600]}"
             )
-            assert len(create_issue_calls) == 0, f"Got: {create_issue_calls}"
+            assert_no_calls_in_stub_mode(e2e_settings, create_issue_calls, "create_issue", f"Got: {create_issue_calls}")
 
 
 # ---------------------------------------------------------------------------
@@ -225,12 +222,7 @@ class TestPlannerRejectsIdea:
     ) -> None:
         """E2E-PI-03 (JIRA): Human rejects → REJECTED issue + no Dev Lead mention."""
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         create_issue_calls: list = []
         send_message_calls: list = []
@@ -246,8 +238,7 @@ class TestPlannerRejectsIdea:
                 accepted_status_writes.append(args)
             return {"key": f"PROJ-{issue_counter[0]}", "id": str(issue_counter[0])}
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool("create_issue", handle_create_issue)
             stub.register_tool("reply_to_thread", lambda args: {"ok": True})
             stub.register_tool("send_message", lambda args: (send_message_calls.append(args) or {"ok": True}))
@@ -268,7 +259,7 @@ class TestPlannerRejectsIdea:
             stub.register_tool("create_task", lambda args: {"id": "cu-rej"})
 
         planner_agent = build_planner_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_planner_registry(planner_agent)
+        registry = build_planner_registry(planner_agent)
 
         _run_planner(
             message="[planner] Actually drop this. Market too competitive.",
@@ -277,15 +268,18 @@ class TestPlannerRejectsIdea:
             registry=registry,
         )
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert stub.was_called("reply_to_thread")
-            assert len(create_issue_calls) >= 1, f"Expected JIRA issue. Got: {create_issue_calls}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_was_called(e2e_settings, stub, "reply_to_thread")
+            assert_stub_calls_count(
+                e2e_settings, create_issue_calls, min_count=1, message=f"Expected JIRA issue. Got: {create_issue_calls}"
+            )
             all_issue_text = " ".join(str(c) for c in create_issue_calls).upper()
             assert "REJECTED" in all_issue_text, f"Expected REJECTED status. Got: {create_issue_calls}"
             dev_lead_in_send = any("dev lead" in str(c).lower() for c in send_message_calls)
             assert not dev_lead_in_send, f"BR-12 violated: {send_message_calls}"
-            assert len(accepted_status_writes) == 0, f"BR-1 violated: {accepted_status_writes}"
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_status_writes, "create_issue", f"BR-1 violated: {accepted_status_writes}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -303,12 +297,7 @@ class TestPlannerAcceptsIdea:
     ) -> None:
         """E2E-PI-04 (JIRA): Human accepts → OPEN issue + Dev Lead mention."""
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         create_issue_calls: list = []
         send_message_calls: list = []
@@ -323,8 +312,7 @@ class TestPlannerAcceptsIdea:
                 accepted_status_writes.append(args)
             return {"key": f"PROJ-{100 + issue_counter[0]}", "id": str(issue_counter[0])}
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool("create_issue", handle_create_issue)
             stub.register_tool("reply_to_thread", lambda args: {"ok": True})
             stub.register_tool("send_message", lambda args: (send_message_calls.append(args) or {"ok": True}))
@@ -355,7 +343,7 @@ class TestPlannerAcceptsIdea:
             stub.register_tool("link_issues", lambda args: {"ok": True})
 
         planner_agent = build_planner_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_planner_registry(planner_agent)
+        registry = build_planner_registry(planner_agent)
 
         _run_planner(
             message="[planner] Great plan! I approve this.",
@@ -364,16 +352,19 @@ class TestPlannerAcceptsIdea:
             registry=registry,
         )
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert stub.was_called("reply_to_thread")
-            assert len(create_issue_calls) >= 1, f"Expected JIRA issue. Got: {create_issue_calls}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_was_called(e2e_settings, stub, "reply_to_thread")
+            assert_stub_calls_count(
+                e2e_settings, create_issue_calls, min_count=1, message=f"Expected JIRA issue. Got: {create_issue_calls}"
+            )
             all_issue_text = " ".join(str(c) for c in create_issue_calls).upper()
             assert "OPEN" in all_issue_text, f"Expected OPEN status. Got: {create_issue_calls}"
-            assert stub.was_called("send_message"), "BR-13: Expected send_message for hand-off"
+            assert_stub_was_called(e2e_settings, stub, "send_message", "BR-13: Expected send_message for hand-off")
             dev_lead_in_send = any("dev lead" in str(c).lower() for c in send_message_calls)
             assert dev_lead_in_send, f"Expected [dev lead] in send_message. Got: {send_message_calls}"
-            assert len(accepted_status_writes) == 0, f"BR-1 violated: {accepted_status_writes}"
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_status_writes, "create_issue", f"BR-1 violated: {accepted_status_writes}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -391,12 +382,7 @@ class TestFullPlannerDevLeadLifecycle:
     ) -> None:
         """E2E-PI-05 (JIRA): survey → accept → OPEN issue → [dev lead] hand-off."""
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         create_issue_calls: list = []
         send_message_calls: list = []
@@ -409,8 +395,7 @@ class TestFullPlannerDevLeadLifecycle:
             issue_counter[0] += 1
             return {"key": f"PROJ-{200 + issue_counter[0]}", "id": str(issue_counter[0])}
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool("create_issue", handle_create_issue)
             stub.register_tool("reply_to_thread", lambda args: (reply_calls.append(args) or {"ok": True}))
             stub.register_tool("send_message", lambda args: (send_message_calls.append(args) or {"ok": True}))
@@ -451,7 +436,7 @@ class TestFullPlannerDevLeadLifecycle:
             )
 
         planner_agent = build_planner_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_planner_registry(planner_agent)
+        registry = build_planner_registry(planner_agent)
 
         _run_planner(
             message="[planner] Great! Approved.",
@@ -460,15 +445,18 @@ class TestFullPlannerDevLeadLifecycle:
             registry=registry,
         )
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert len(create_issue_calls) >= 1, f"Expected OPEN issue. Got: {create_issue_calls}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_calls_count(
+                e2e_settings, create_issue_calls, min_count=1, message=f"Expected OPEN issue. Got: {create_issue_calls}"
+            )
             all_issue_text = " ".join(str(c) for c in create_issue_calls).upper()
             assert "OPEN" in all_issue_text or "REJECTED" not in all_issue_text
-            assert stub.was_called("send_message")
+            assert_stub_was_called(e2e_settings, stub, "send_message")
             dev_lead_mention = any("dev lead" in str(c).lower() for c in send_message_calls)
             assert dev_lead_mention, f"Expected [dev lead] in send_message. Got: {send_message_calls}"
             accepted_writes = [c for c in create_issue_calls if "ACCEPTED" in str(c).upper()]
-            assert len(accepted_writes) == 0, f"BR-1 violated: {accepted_writes}"
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_writes, "create_issue", f"BR-1 violated: {accepted_writes}"
+            )
             reply_with_dev_lead = any("dev lead" in str(c).lower() for c in reply_calls)
             assert not reply_with_dev_lead, f"BR-13 violated: hand-off via reply_to_thread"

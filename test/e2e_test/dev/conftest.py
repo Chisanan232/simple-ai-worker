@@ -159,3 +159,58 @@ def pr_timeout_tool_order(fake_llm_session: Optional[FakeLLM]) -> Generator[None
     if fake_llm_session is not None:
         fake_llm_session.set_tool_order("get_pull_request_reviews")
     yield
+
+
+@pytest.fixture
+def pr_merge_settings(e2e_settings: E2ESettings) -> Any:
+    """Settings mock for PR auto-merge watcher tests (E2E-11 through E2E-15).
+
+    Provides:
+    - PR_AUTO_MERGE_TIMEOUT_SECONDS = 300 (default, can be overridden)
+    - PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
+
+    Use this fixture in tests that verify auto-merge behavior and timeout logic.
+    """
+    from unittest.mock import MagicMock
+
+    s = MagicMock()
+    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = 300
+    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
+    return s
+
+
+@pytest.fixture
+def pr_merge_settings_with_timeout(e2e_settings: E2ESettings) -> Any:
+    """Parameterizable PR merge settings for tests that need custom timeouts.
+
+    Returns a factory function that accepts optional timeout parameter:
+        settings = pr_merge_settings_with_timeout(timeout=600)
+
+    Use this when a test needs to override the default 300-second timeout.
+    """
+    from unittest.mock import MagicMock
+
+    def _make_settings(timeout: int = 300) -> Any:
+        s = MagicMock()
+        s.PR_AUTO_MERGE_TIMEOUT_SECONDS = timeout
+        s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
+        s.MAX_CONCURRENT_DEV_AGENTS = 1
+        return s
+
+    return _make_settings
+
+
+@pytest.fixture
+def pr_review_settings(e2e_settings: E2ESettings) -> Any:
+    """Settings mock for PR review comment handler tests (E2E-16 through E2E-19).
+
+    Provides:
+    - PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
+
+    Use this fixture in tests that verify review comment handling and fix dispatch.
+    """
+    from unittest.mock import MagicMock
+
+    s = MagicMock()
+    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
+    return s

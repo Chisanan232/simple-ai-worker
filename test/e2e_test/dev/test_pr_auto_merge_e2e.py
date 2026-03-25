@@ -13,15 +13,13 @@ Verifies:
 
 from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
+from test.e2e_test.common.pr_state_management import populate_pr_state
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     MCPStubServer,
@@ -30,32 +28,7 @@ from test.e2e_test.conftest import (
     skip_without_llm,
 )
 
-from src.ticket.models import PRRecord
 from src.ticket.workflow import WorkflowConfig
-
-
-def _make_e2e_settings(timeout: int = 300) -> Any:
-    s = MagicMock()
-    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = timeout
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    return s
-
-
-def _pre_populate_pr(
-    ticket_id: str,
-    pr_url: str,
-    age_seconds: float = 310.0,
-) -> None:
-    """Seed the shared _open_prs dict as if _execute_ticket had already run."""
-    import src.scheduler.jobs.scan_tickets as scan_mod
-
-    scan_mod._open_prs[ticket_id] = PRRecord(
-        ticket_id=ticket_id,
-        pr_url=pr_url,
-        opened_at_utc=time.time() - age_seconds,
-    )
-    scan_mod._prs_under_review[ticket_id] = pr_url
-
 
 # ===========================================================================
 # E2E-11: Auto-merge with approval after timeout
@@ -68,6 +41,7 @@ class TestAutoMergeWithApproval:
         self,
         mcp_stub: MCPStubServer,
         merge_tool_order: None,
+        pr_merge_settings,
     ) -> None:
         """E2E-11: 1 approval + stale PR → merged → ticket → COMPLETE → Slack notified."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -78,7 +52,7 @@ class TestAutoMergeWithApproval:
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/100"
 
-        _pre_populate_pr("PROJ-20", pr_url, age_seconds=310)
+        populate_pr_state("PROJ-20", pr_url, age_seconds=310)
 
         merge_calls: list = []
         transition_calls: list = []
@@ -121,7 +95,7 @@ class TestAutoMergeWithApproval:
 
         pr_merge_watcher_job(
             registry=registry,
-            settings=_make_e2e_settings(timeout=300),
+            settings=pr_merge_settings,
             executor=ThreadPoolExecutor(max_workers=1),
             workflow=workflow,
         )
@@ -141,6 +115,7 @@ class TestNoMergeWithoutApproval:
         self,
         mcp_stub: MCPStubServer,
         no_approval_tool_order: None,
+        pr_merge_settings,
     ) -> None:
         """E2E-12: 0 approvals → merge_pull_request never called (BR-2)."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -151,7 +126,7 @@ class TestNoMergeWithoutApproval:
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/200"
 
-        _pre_populate_pr("PROJ-21", pr_url, age_seconds=310)
+        populate_pr_state("PROJ-21", pr_url, age_seconds=310)
 
         merge_calls: list = []
 
@@ -172,7 +147,7 @@ class TestNoMergeWithoutApproval:
 
         pr_merge_watcher_job(
             registry=registry,
-            settings=_make_e2e_settings(timeout=300),
+            settings=pr_merge_settings,
             executor=ThreadPoolExecutor(max_workers=1),
             workflow=workflow,
         )
@@ -193,6 +168,7 @@ class TestNoMergeBeforeTimeout:
         self,
         mcp_stub: MCPStubServer,
         pr_timeout_tool_order: None,
+        pr_merge_settings,
     ) -> None:
         """E2E-13: 1 approval but PR only 120s old → no merge yet."""
         from src.scheduler.jobs.pr_merge_watcher import pr_merge_watcher_job
@@ -203,7 +179,7 @@ class TestNoMergeBeforeTimeout:
         pr_url = "https://github.com/org/repo/pull/300"
 
         # Fresh PR: only 120 seconds old.
-        _pre_populate_pr("PROJ-22", pr_url, age_seconds=120)
+        populate_pr_state("PROJ-22", pr_url, age_seconds=120)
 
         merge_calls: list = []
 
@@ -228,7 +204,7 @@ class TestNoMergeBeforeTimeout:
 
         pr_merge_watcher_job(
             registry=registry,
-            settings=_make_e2e_settings(timeout=300),
+            settings=pr_merge_settings,
             executor=ThreadPoolExecutor(max_workers=1),
             workflow=workflow,
         )
@@ -249,6 +225,7 @@ class TestUserMergedBeforeTimeout:
         self,
         mcp_stub: MCPStubServer,
         user_merged_tool_order: None,
+        pr_merge_settings,
     ) -> None:
         """E2E-14: PR already merged by user → ticket → COMPLETE, entry cleared."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -259,7 +236,7 @@ class TestUserMergedBeforeTimeout:
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/400"
 
-        _pre_populate_pr("PROJ-23", pr_url, age_seconds=60)  # Fresh, but already merged.
+        populate_pr_state("PROJ-23", pr_url, age_seconds=60)  # Fresh, but already merged.
 
         merge_calls: list = []
         transition_calls: list = []
@@ -288,7 +265,7 @@ class TestUserMergedBeforeTimeout:
 
         pr_merge_watcher_job(
             registry=registry,
-            settings=_make_e2e_settings(timeout=300),
+            settings=pr_merge_settings,
             executor=ThreadPoolExecutor(max_workers=1),
             workflow=workflow,
         )
@@ -314,6 +291,7 @@ class TestMergeClearsReviewWatch:
         self,
         mcp_stub: MCPStubServer,
         merge_tool_order: None,
+        pr_merge_settings,
     ) -> None:
         """E2E-15: After auto-merge, _prs_under_review entry is removed."""
         import src.scheduler.jobs.scan_tickets as scan_mod
@@ -324,7 +302,7 @@ class TestMergeClearsReviewWatch:
         workflow = WorkflowConfig(E2E_WORKFLOW_CONFIG)
         pr_url = "https://github.com/org/repo/pull/500"
 
-        _pre_populate_pr("PROJ-24", pr_url, age_seconds=310)
+        populate_pr_state("PROJ-24", pr_url, age_seconds=310)
 
         stub.register_tool(
             "get_pull_request",
@@ -351,7 +329,7 @@ class TestMergeClearsReviewWatch:
 
         pr_merge_watcher_job(
             registry=registry,
-            settings=_make_e2e_settings(timeout=300),
+            settings=pr_merge_settings,
             executor=ThreadPoolExecutor(max_workers=1),
             workflow=workflow,
         )

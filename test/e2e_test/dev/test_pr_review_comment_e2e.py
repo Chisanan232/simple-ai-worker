@@ -13,32 +13,19 @@ Verifies:
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
+from test.e2e_test.common.pr_state_management import populate_under_review
 from test.e2e_test.conftest import (
     MCPStubServer,
     build_dev_agent_against_stubs,
     build_e2e_registry,
     skip_without_llm,
 )
-
-
-def _make_e2e_settings() -> Any:
-    s = MagicMock()
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    return s
-
-
-def _populate_under_review(ticket_id: str, pr_url: str) -> None:
-    import src.scheduler.jobs.scan_tickets as scan_mod
-
-    scan_mod._prs_under_review[ticket_id] = pr_url
-
 
 # ===========================================================================
 # E2E-16: Fixes changes-requested and replies to reviewer
@@ -51,6 +38,7 @@ class TestFixesChangesRequested:
         self,
         mcp_stub: MCPStubServer,
         review_reply_tool_order: None,
+        pr_review_settings,
     ) -> None:
         """E2E-16: CHANGES_REQUESTED + 2 comments → fixes committed, comments replied to."""
         from src.scheduler.jobs.pr_review_comment_handler import (
@@ -60,7 +48,7 @@ class TestFixesChangesRequested:
         stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/600"
-        _populate_under_review("PROJ-30", pr_url)
+        populate_under_review("PROJ-30", pr_url)
 
         reply_calls: list = []
         approve_calls: list = []
@@ -102,7 +90,7 @@ class TestFixesChangesRequested:
         try:
             pr_review_comment_handler_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=pr_review_settings,
                 executor=executor,
             )
             executor.shutdown(wait=True)
@@ -125,6 +113,7 @@ class TestNoFixForApprovedPR:
     def test_no_fix_for_approved_pr(
         self,
         mcp_stub: MCPStubServer,
+        pr_review_settings,
     ) -> None:
         """E2E-17: APPROVED PR + 0 unresolved comments → no fix crew dispatched."""
         from src.scheduler.jobs.pr_review_comment_handler import (
@@ -134,7 +123,7 @@ class TestNoFixForApprovedPR:
         stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/700"
-        _populate_under_review("PROJ-31", pr_url)
+        populate_under_review("PROJ-31", pr_url)
 
         stub.register_tool(
             "get_pull_request_reviews",
@@ -151,7 +140,7 @@ class TestNoFixForApprovedPR:
 
         pr_review_comment_handler_job(
             registry=registry,
-            settings=_make_e2e_settings(),
+            settings=pr_review_settings,
             executor=executor,
         )
 
@@ -168,6 +157,7 @@ class TestDeduplicationPreventsParallelFix:
     def test_deduplication_prevents_parallel_fix(
         self,
         mcp_stub: MCPStubServer,
+        pr_review_settings,
     ) -> None:
         """E2E-18: Two rapid triggers for same ticket → fix dispatched at most once."""
         import src.scheduler.jobs.pr_review_comment_handler as handler_mod
@@ -178,7 +168,7 @@ class TestDeduplicationPreventsParallelFix:
         stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/800"
-        _populate_under_review("PROJ-32", pr_url)
+        populate_under_review("PROJ-32", pr_url)
 
         stub.register_tool(
             "get_pull_request_reviews",
@@ -201,7 +191,7 @@ class TestDeduplicationPreventsParallelFix:
         # First call.
         pr_review_comment_handler_job(
             registry=registry,
-            settings=_make_e2e_settings(),
+            settings=pr_review_settings,
             executor=executor,
         )
 
@@ -211,7 +201,7 @@ class TestDeduplicationPreventsParallelFix:
         # Second rapid call — should NOT dispatch again.
         pr_review_comment_handler_job(
             registry=registry,
-            settings=_make_e2e_settings(),
+            settings=pr_review_settings,
             executor=executor,
         )
 
@@ -231,6 +221,7 @@ class TestAINeverSelfApproves:
     def test_ai_never_self_approves(
         self,
         mcp_stub: MCPStubServer,
+        pr_review_settings,
     ) -> None:
         """E2E-19: Full fix cycle — approve_pull_request / APPROVE review NEVER called."""
         from src.scheduler.jobs.pr_review_comment_handler import (
@@ -240,7 +231,7 @@ class TestAINeverSelfApproves:
         stub = mcp_stub
         url = stub.url
         pr_url = "https://github.com/org/repo/pull/900"
-        _populate_under_review("PROJ-33", pr_url)
+        populate_under_review("PROJ-33", pr_url)
 
         approve_calls: list = []
 
@@ -272,7 +263,7 @@ class TestAINeverSelfApproves:
         try:
             pr_review_comment_handler_job(
                 registry=registry,
-                settings=_make_e2e_settings(),
+                settings=pr_review_settings,
                 executor=executor,
             )
             executor.shutdown(wait=True)

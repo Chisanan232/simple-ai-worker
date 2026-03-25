@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,6 +22,22 @@ pytestmark = [
     pytest.mark.slow,
 ]
 
+from test.e2e_test.common.assertions import (
+    assert_no_calls_in_stub_mode,
+    assert_stub_calls_count,
+    assert_stub_was_called,
+)
+from test.e2e_test.common.hybrid_mode import (
+    get_service_url,
+    should_assert_stub_calls,
+    should_register_stub_tools,
+)
+from test.e2e_test.common.state_management import reset_planning_state
+from test.e2e_test.common.test_infrastructure import (
+    build_dev_lead_registry,
+    make_settings,
+    make_stub_tracker_registry_planning,
+)
 from test.e2e_test.conftest import (
     E2E_WORKFLOW_CONFIG,
     E2ESettings,
@@ -43,51 +58,6 @@ E2E_PLANNING_WORKFLOW_CONFIG = {
 }
 
 
-def _make_settings() -> Any:
-    s = MagicMock()
-    s.PR_AUTO_MERGE_TIMEOUT_SECONDS = 300
-    s.PR_REVIEW_COMMENT_CHECK_INTERVAL_SECONDS = 120
-    s.MAX_CONCURRENT_DEV_AGENTS = 1
-    return s
-
-
-def _build_dev_lead_registry(dev_lead_agent: Any) -> Any:
-    from src.agents.registry import AgentRegistry
-
-    registry = AgentRegistry()
-    registry.register("dev_lead", dev_lead_agent)
-    return registry
-
-
-def _make_stub_tracker_registry(
-    open_tickets: list | None = None,
-    in_planning_tickets: list | None = None,
-    comments_by_ticket: dict | None = None,
-) -> Any:
-    _open = open_tickets or []
-    _planning = in_planning_tickets or []
-    _comments = comments_by_ticket or {}
-
-    class _StubTracker:
-        def fetch_tickets_for_operation(self, op: Any) -> list:
-            from src.ticket.workflow import WorkflowOperation
-
-            if op == WorkflowOperation.OPEN_FOR_DEV:
-                return _open
-            if op == WorkflowOperation.IN_PLANNING:
-                return _planning
-            return []
-
-        def fetch_ticket_comments(self, ticket_id: str) -> list:
-            return _comments.get(ticket_id, [])
-
-    class _StubTrackerRegistry:
-        def get(self, source: str) -> _StubTracker:
-            return _StubTracker()
-
-    return _StubTrackerRegistry()
-
-
 # ---------------------------------------------------------------------------
 # E2E-DL-01: Dev Lead posts clarifying questions (JIRA)
 # ---------------------------------------------------------------------------
@@ -105,18 +75,12 @@ class TestDevLeadFeasibilityAssessment:
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         create_issue_calls: list = []
         create_task_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool("reply_to_thread", lambda args: {"ok": True})
             stub.register_tool("send_message", lambda args: {"ok": True})
             stub.register_tool(
@@ -132,7 +96,7 @@ class TestDevLeadFeasibilityAssessment:
             stub.register_tool("create_task", lambda args: (create_task_calls.append(args) or {"id": "cu-new"}))
 
         dev_lead_agent = build_dev_lead_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_dev_lead_registry(dev_lead_agent)
+        registry = build_dev_lead_registry(dev_lead_agent)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
@@ -176,17 +140,11 @@ class TestDevLeadFetchesExistingStory:
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         get_issue_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool(
                 "get_issue",
                 lambda args: (
@@ -203,7 +161,7 @@ class TestDevLeadFetchesExistingStory:
             stub.register_tool("search_issues", lambda args: [])
 
         dev_lead_agent = build_dev_lead_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_dev_lead_registry(dev_lead_agent)
+        registry = build_dev_lead_registry(dev_lead_agent)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
@@ -223,9 +181,13 @@ class TestDevLeadFetchesExistingStory:
         finally:
             executor.shutdown(wait=False)
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert len(get_issue_calls) > 0, f"Expected Dev Lead to call get_issue. All calls: {stub.all_calls}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_calls_count(
+                e2e_settings,
+                get_issue_calls,
+                min_count=1,
+                message=f"Expected Dev Lead to call get_issue. All calls: {stub.all_calls}",
+            )
             fetched_keys = [c.get("issue_key", c.get("key", "")) for c in get_issue_calls]
             assert any("PROJ-50" in str(k) for k in fetched_keys)
 
@@ -247,12 +209,7 @@ class TestDevLeadBreakdown:
         from src.slack_app.handlers.dev_lead import dev_lead_handler
 
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         create_issue_calls: list = []
         add_comment_calls: list = []
@@ -267,8 +224,7 @@ class TestDevLeadBreakdown:
                 accepted_write_calls.append(args)
             return {"key": f"PROJ-10{sub_task_counter[0]}", "id": str(sub_task_counter[0])}
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool(
                 "get_issue",
                 lambda args: {
@@ -291,7 +247,7 @@ class TestDevLeadBreakdown:
             stub.register_tool("update_task", lambda args: {"ok": True})
 
         dev_lead_agent = build_dev_lead_agent_against_stubs(url=url, e2e_settings=e2e_settings)
-        registry = _build_dev_lead_registry(dev_lead_agent)
+        registry = build_dev_lead_registry(dev_lead_agent)
 
         message = (
             "[dev lead] All questions answered — please break down PROJ-50 into sub-tasks. "
@@ -312,12 +268,23 @@ class TestDevLeadBreakdown:
         finally:
             executor.shutdown(wait=False)
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert len(create_issue_calls) >= 2, f"Expected at least 2 sub-tasks. Got: {len(create_issue_calls)}"
-            assert len(add_comment_calls) > 0, "Expected Dev Lead to add comment on parent ticket PROJ-50"
-            assert stub.was_called("reply_to_thread")
-            assert len(accepted_write_calls) == 0, f"BR-1 violated: {accepted_write_calls}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_calls_count(
+                e2e_settings,
+                create_issue_calls,
+                min_count=2,
+                message=f"Expected at least 2 sub-tasks. Got: {len(create_issue_calls)}",
+            )
+            assert_stub_calls_count(
+                e2e_settings,
+                add_comment_calls,
+                min_count=1,
+                message="Expected Dev Lead to add comment on parent ticket PROJ-50",
+            )
+            assert_stub_was_called(e2e_settings, stub, "reply_to_thread")
+            assert_no_calls_in_stub_mode(
+                e2e_settings, accepted_write_calls, "create_issue", f"BR-1 violated: {accepted_write_calls}"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -338,18 +305,12 @@ class TestDevAgentInitialPlan:
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         add_comment_calls: list = []
         transition_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool(
                 "get_issue",
                 lambda args: {
@@ -383,17 +344,16 @@ class TestDevAgentInitialPlan:
         )
         registry = build_e2e_registry(dev_agent)
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_planning(
                     open_tickets=[
                         TicketRecord(
                             id="PROJ-20", source="jira", title="Implement OAuth2 login", url="", raw_status="OPEN"
@@ -404,13 +364,15 @@ class TestDevAgentInitialPlan:
             executor.shutdown(wait=True)
         finally:
             executor.shutdown(wait=False)
-            pn_mod._in_planning_tickets.clear()
-            pn_mod._plan_comment_watermarks.clear()
+            reset_planning_state(pn_mod)
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert len(add_comment_calls) >= 1, (
-                "Expected Dev Agent to post development plan. " f"All calls: {[c['tool'] for c in stub.all_calls]}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_calls_count(
+                e2e_settings,
+                add_comment_calls,
+                min_count=1,
+                message="Expected Dev Agent to post development plan. "
+                f"All calls: {[c['tool'] for c in stub.all_calls]}",
             )
             plan_bodies = [c.get("comment", c.get("body", c.get("text", ""))) for c in add_comment_calls]
             has_plan = any(
@@ -439,18 +401,12 @@ class TestDevAgentPlanRevision:
         from src.scheduler.jobs.plan_and_notify import plan_and_notify_job
 
         stub = mcp_stub
-
-        # Use appropriate URL based on mode
-        if e2e_settings.USE_TESTCONTAINERS:
-            url = mcp_urls["jira"]
-        else:
-            url = stub.url
+        url = get_service_url("jira", e2e_settings, mcp_urls, stub)
 
         add_comment_calls: list = []
         transition_calls: list = []
 
-        # Only register tool handlers in stub mode
-        if not e2e_settings.USE_TESTCONTAINERS:
+        if should_register_stub_tools(e2e_settings):
             stub.register_tool(
                 "get_issue",
                 lambda args: {
@@ -487,17 +443,16 @@ class TestDevAgentPlanRevision:
             source="jira",
         )
 
-        pn_mod._in_planning_tickets.clear()
-        pn_mod._plan_comment_watermarks.clear()
+        reset_planning_state(pn_mod)
 
         executor = ThreadPoolExecutor(max_workers=1)
         try:
             plan_and_notify_job(
                 registry=registry,
-                settings=_make_settings(),
+                settings=make_settings(),
                 executor=executor,
                 workflow=workflow,
-                tracker_registry=_make_stub_tracker_registry(
+                tracker_registry=make_stub_tracker_registry_planning(
                     in_planning_tickets=[
                         TicketRecord(
                             id="PROJ-21", source="jira", title="DB migration tool", url="", raw_status="IN PLANNING"
@@ -509,14 +464,15 @@ class TestDevAgentPlanRevision:
             executor.shutdown(wait=True)
         finally:
             executor.shutdown(wait=False)
-            pn_mod._in_planning_tickets.clear()
-            pn_mod._plan_comment_watermarks.clear()
+            reset_planning_state(pn_mod)
 
-        # Stub-specific assertions (only in stub mode with real LLM)
-        if not e2e_settings.USE_TESTCONTAINERS and not e2e_settings.USE_FAKE_LLM:
-            assert (
-                len(add_comment_calls) >= 1
-            ), f"Expected revised plan. All calls: {[c['tool'] for c in stub.all_calls]}"
+        if should_assert_stub_calls(e2e_settings):
+            assert_stub_calls_count(
+                e2e_settings,
+                add_comment_calls,
+                min_count=1,
+                message=f"Expected revised plan. All calls: {[c['tool'] for c in stub.all_calls]}",
+            )
             plan_bodies = [c.get("comment", c.get("body", c.get("text", ""))) for c in add_comment_calls]
             has_rollback_mention = any(
                 "rollback" in body.lower() or "migration" in body.lower() or "revision" in body.lower()
