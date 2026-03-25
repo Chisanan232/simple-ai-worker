@@ -15,7 +15,6 @@ Tests are skipped when no LLM API key is present.
 
 from __future__ import annotations
 
-
 import pytest
 
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]
