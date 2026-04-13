@@ -61,7 +61,7 @@ dev = [
     "freezegun>=1.5.5",
     "pytest-httpserver>=1.0.0",
     # Docker Compose lifecycle management for E2E live-mode tests (Mode 3)
-    "testcontainers[compose]>=4.14.1",
+    "testcontainers[compose]>=4.14.2",
 ]
 pre-commit-ci = [
     "pre-commit>=3.5.0,<5",
