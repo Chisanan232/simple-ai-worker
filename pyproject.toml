@@ -31,7 +31,7 @@ dependencies = [
     # CrewAI Enterprise native tool resolution (Agent(apps=[...]))
     "crewai-tools>=1.10.1",
     # Slack Bolt framework — Socket Mode event handler for real-time Planner / Dev Lead chat
-    "slack-bolt>=1.27.0",
+    "slack-bolt>=1.28.0",
     # Data validation for data models
     "pydantic>=2.11.10",
     "pydantic-settings>=2.10.1",
